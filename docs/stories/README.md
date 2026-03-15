@@ -14,5 +14,6 @@ Standalone Go CLI for read-only Google Search Console analysis.
 |---|-------|--------|
 | P1-S1 | Bootstrap read-only service-account CLI foundation | Done |
 | P1-S2 | Add operator reporting shortcuts and overview workflow | Done |
+| P1-S3 | Fix query flag parsing and document system install | Done |
 
 **Done when:** `gsc-cli` can list sites, query search analytics, list sitemaps, and inspect a URL using service-account credentials with deterministic CLI output.

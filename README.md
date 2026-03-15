@@ -39,6 +39,22 @@ already excludes common local key filenames such as `service-account*.json`.
 go build ./...
 ```
 
+## Install
+
+Build and install locally to the Homebrew prefix bin directory:
+
+```bash
+go build -o ./gsc-cli ./cmd/gsc-cli
+install -m 755 ./gsc-cli "$(brew --prefix)/bin/gsc-cli"
+```
+
+Verify:
+
+```bash
+command -v gsc-cli
+gsc-cli --help
+```
+
 ## Usage
 
 You can pass credentials and site on the command line:

@@ -103,7 +103,7 @@ func runAnalyticsQuery(ctx context.Context, args []string) error {
 		limit      = fs.Int64("limit", 1000, "maximum rows to return (1-25000)")
 		startRow   = fs.Int64("start-row", 0, "zero-based row offset")
 	)
-	if err := fs.Parse(args[1:]); err != nil {
+	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if err := base.Resolve(true); err != nil {

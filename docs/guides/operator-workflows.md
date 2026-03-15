@@ -9,6 +9,23 @@ export GSC_CLI_CREDENTIALS_FILE=/Users/bene/Dev-Source-NoBackup/gsc-cli/service-
 export GSC_CLI_SITE_URL=sc-domain:futurelab.studio
 ```
 
+## System Install
+
+Build and install to the Homebrew prefix bin directory:
+
+```bash
+cd /Users/bene/Dev-Source-NoBackup/gsc-cli
+go build -o ./gsc-cli ./cmd/gsc-cli
+install -m 755 ./gsc-cli "$(brew --prefix)/bin/gsc-cli"
+```
+
+Verify:
+
+```bash
+command -v gsc-cli
+gsc-cli --help
+```
+
 ## Top Pages
 
 Recent 28-day window:
