@@ -1,0 +1,284 @@
+package config
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	gscapi "google.golang.org/api/searchconsole/v1"
+)
+
+const (
+	OutputJSON  = "json"
+	OutputTable = "table"
+
+	envCredentialsFile = "GSC_CLI_CREDENTIALS_FILE"
+	envSiteURL         = "GSC_CLI_SITE_URL"
+)
+
+var (
+	allowedOutputs = map[string]struct{}{
+		OutputJSON:  {},
+		OutputTable: {},
+	}
+	allowedDimensions = map[string]struct{}{
+		"DATE":              {},
+		"QUERY":             {},
+		"PAGE":              {},
+		"COUNTRY":           {},
+		"DEVICE":            {},
+		"SEARCH_APPEARANCE": {},
+		"HOUR":              {},
+	}
+	allowedSearchTypes = map[string]struct{}{
+		"WEB":         {},
+		"IMAGE":       {},
+		"VIDEO":       {},
+		"NEWS":        {},
+		"DISCOVER":    {},
+		"GOOGLE_NEWS": {},
+	}
+	allowedDataStates = map[string]struct{}{
+		"FINAL":      {},
+		"ALL":        {},
+		"HOURLY_ALL": {},
+	}
+)
+
+type Common struct {
+	CredentialsFile string
+	Site            string
+	Output          string
+}
+
+type AnalyticsInput struct {
+	StartDate  string
+	EndDate    string
+	Dimensions string
+	SearchType string
+	DataState  string
+	Limit      int64
+	StartRow   int64
+}
+
+type InspectInput struct {
+	Site         string
+	URL          string
+	LanguageCode string
+}
+
+type DateRange struct {
+	Start string
+	End   string
+}
+
+func (c *Common) Resolve(requireSite bool) error {
+	c.CredentialsFile = firstNonEmpty(c.CredentialsFile, os.Getenv(envCredentialsFile))
+	c.Site = firstNonEmpty(c.Site, os.Getenv(envSiteURL))
+	c.Output = strings.ToLower(firstNonEmpty(c.Output, OutputJSON))
+
+	if err := validateCredentialsFile(c.CredentialsFile); err != nil {
+		return err
+	}
+	if requireSite && strings.TrimSpace(c.Site) == "" {
+		return errors.New("site is required")
+	}
+	if _, ok := allowedOutputs[c.Output]; !ok {
+		return fmt.Errorf("unsupported output mode %q", c.Output)
+	}
+	return nil
+}
+
+func BuildAnalyticsRequest(input AnalyticsInput) (*gscapi.SearchAnalyticsQueryRequest, error) {
+	startDate := strings.TrimSpace(input.StartDate)
+	endDate := strings.TrimSpace(input.EndDate)
+	if err := validateDate(startDate); err != nil {
+		return nil, fmt.Errorf("invalid start date: %w", err)
+	}
+	if err := validateDate(endDate); err != nil {
+		return nil, fmt.Errorf("invalid end date: %w", err)
+	}
+	if startDate > endDate {
+		return nil, errors.New("start date must be less than or equal to end date")
+	}
+	if input.Limit < 1 || input.Limit > 25000 {
+		return nil, errors.New("limit must be between 1 and 25000")
+	}
+	if input.StartRow < 0 {
+		return nil, errors.New("start-row must be greater than or equal to 0")
+	}
+
+	dimensions, err := parseDimensions(input.Dimensions)
+	if err != nil {
+		return nil, err
+	}
+	searchType, err := normalizeSearchType(input.SearchType)
+	if err != nil {
+		return nil, err
+	}
+	dataState, err := normalizeDataState(input.DataState)
+	if err != nil {
+		return nil, err
+	}
+	if contains(dimensions, "HOUR") && dataState != "HOURLY_ALL" {
+		return nil, errors.New(`dimension "HOUR" requires data-state "hourly_all"`)
+	}
+
+	return &gscapi.SearchAnalyticsQueryRequest{
+		StartDate:  startDate,
+		EndDate:    endDate,
+		Dimensions: dimensions,
+		SearchType: searchType,
+		DataState:  dataState,
+		RowLimit:   input.Limit,
+		StartRow:   input.StartRow,
+	}, nil
+}
+
+func BuildInspectRequest(input InspectInput) (*gscapi.InspectUrlIndexRequest, error) {
+	site := strings.TrimSpace(input.Site)
+	targetURL := strings.TrimSpace(input.URL)
+	languageCode := firstNonEmpty(strings.TrimSpace(input.LanguageCode), "en-US")
+
+	if site == "" {
+		return nil, errors.New("site is required")
+	}
+	if targetURL == "" {
+		return nil, errors.New("url is required")
+	}
+	if !looksLikeURL(targetURL) {
+		return nil, errors.New("url must start with http:// or https://")
+	}
+	if languageCode == "" {
+		return nil, errors.New("language is required")
+	}
+
+	return &gscapi.InspectUrlIndexRequest{
+		SiteUrl:       site,
+		InspectionUrl: targetURL,
+		LanguageCode:  languageCode,
+	}, nil
+}
+
+func ResolveDateRange(startDate, endDate string) (DateRange, error) {
+	startDate = strings.TrimSpace(startDate)
+	endDate = strings.TrimSpace(endDate)
+	if startDate == "" && endDate == "" {
+		end := time.Now().AddDate(0, 0, -1)
+		start := end.AddDate(0, 0, -27)
+		return DateRange{
+			Start: start.Format("2006-01-02"),
+			End:   end.Format("2006-01-02"),
+		}, nil
+	}
+	if startDate == "" || endDate == "" {
+		return DateRange{}, errors.New("start and end dates must be provided together")
+	}
+	if err := validateDate(startDate); err != nil {
+		return DateRange{}, fmt.Errorf("invalid start date: %w", err)
+	}
+	if err := validateDate(endDate); err != nil {
+		return DateRange{}, fmt.Errorf("invalid end date: %w", err)
+	}
+	if startDate > endDate {
+		return DateRange{}, errors.New("start date must be less than or equal to end date")
+	}
+	return DateRange{Start: startDate, End: endDate}, nil
+}
+
+func parseDimensions(value string) ([]string, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, errors.New("at least one dimension is required")
+	}
+
+	parts := strings.Split(value, ",")
+	normalized := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		dimension := strings.ToUpper(strings.TrimSpace(part))
+		if dimension == "" {
+			continue
+		}
+		if _, ok := allowedDimensions[dimension]; !ok {
+			return nil, fmt.Errorf("unsupported dimension %q", part)
+		}
+		if _, ok := seen[dimension]; ok {
+			continue
+		}
+		seen[dimension] = struct{}{}
+		normalized = append(normalized, dimension)
+	}
+	if len(normalized) == 0 {
+		return nil, errors.New("at least one dimension is required")
+	}
+	return normalized, nil
+}
+
+func normalizeSearchType(value string) (string, error) {
+	searchType := strings.ToUpper(strings.TrimSpace(firstNonEmpty(value, "WEB")))
+	if _, ok := allowedSearchTypes[searchType]; !ok {
+		return "", fmt.Errorf("unsupported search type %q", value)
+	}
+	return searchType, nil
+}
+
+func normalizeDataState(value string) (string, error) {
+	dataState := strings.ToUpper(strings.TrimSpace(firstNonEmpty(value, "FINAL")))
+	if _, ok := allowedDataStates[dataState]; !ok {
+		return "", fmt.Errorf("unsupported data state %q", value)
+	}
+	return dataState, nil
+}
+
+func validateDate(value string) error {
+	if value == "" {
+		return errors.New("value is required")
+	}
+	if _, err := time.Parse("2006-01-02", value); err != nil {
+		return errors.New("must be in YYYY-MM-DD format")
+	}
+	return nil
+}
+
+func validateCredentialsFile(path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return errors.New("credentials file is required")
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("credentials file %q does not exist", filepath.Clean(path))
+		}
+		return fmt.Errorf("stat credentials file: %w", err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("credentials file %q is a directory", filepath.Clean(path))
+	}
+	return nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func looksLikeURL(value string) bool {
+	return strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://")
+}
+
+func contains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}

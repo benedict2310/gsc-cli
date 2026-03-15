@@ -1,0 +1,9 @@
+/gsc-cli
+dist/
+*.test
+.env
+.env.*
+*.local.json
+service-account*.json
+service-account.*.json
+gsc-service-account*.json
