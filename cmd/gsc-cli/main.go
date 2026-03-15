@@ -51,12 +51,39 @@ func run(ctx context.Context, args []string) error {
 		return runInspect(ctx, args[1:])
 	case "version":
 		return runVersion(args[1:])
-	case "help", "-h", "--help":
+	case "help":
+		return runHelp(args[1:])
+	case "-h", "--help":
 		printUsage()
 		return nil
 	default:
 		printUsage()
 		return fmt.Errorf("unknown command %q", args[0])
+	}
+}
+
+func runHelp(args []string) error {
+	if len(args) == 0 {
+		printUsage()
+		return nil
+	}
+	switch args[0] {
+	case "analytics":
+		if len(args) == 1 {
+			printAnalyticsUsage()
+			return nil
+		}
+		return run(context.Background(), []string{"analytics", args[1], "--help"})
+	case "report":
+		if len(args) == 1 {
+			printReportUsage()
+			return nil
+		}
+		return run(context.Background(), []string{"report", args[1], "--help"})
+	case "doctor", "version", "sites", "sitemaps", "inspect":
+		return run(context.Background(), append([]string{args[0]}, "--help"))
+	default:
+		return fmt.Errorf("unknown help topic %q", args[0])
 	}
 }
 
@@ -103,6 +130,9 @@ func runAnalytics(ctx context.Context, args []string) error {
 		return runAnalyticsTopPages(ctx, args[1:])
 	case "top-queries":
 		return runAnalyticsTopQueries(ctx, args[1:])
+	case "help":
+		printAnalyticsUsage()
+		return nil
 	default:
 		printAnalyticsUsage()
 		return fmt.Errorf("unknown analytics subcommand %q", args[0])
@@ -223,6 +253,9 @@ func runReport(ctx context.Context, args []string) error {
 		printReportUsage()
 		return nil
 	}
+	if args[0] == "compare" {
+		return runReportCompare(ctx, args[1:])
+	}
 	if args[0] != "overview" {
 		printReportUsage()
 		return fmt.Errorf("unknown report subcommand %q", args[0])
@@ -327,6 +360,104 @@ func runReport(ctx context.Context, args []string) error {
 		Inspection: inspection,
 	}
 	return output.RenderOverview(os.Stdout, base.Output, report)
+}
+
+func runReportCompare(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("report compare", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	base := bindCommonFlags(fs)
+	var (
+		startDate  = fs.String("start", "", "current period start date in YYYY-MM-DD")
+		endDate    = fs.String("end", "", "current period end date in YYYY-MM-DD")
+		days       = fs.String("days", "", "shortcut window in days: 7, 28, or 90; defaults to 28 when omitted")
+		limit      = fs.Int64("limit", 10, "maximum rows for each period")
+		searchType = fs.String("search-type", "web", "search type: web,image,video,news,discover,google_news")
+		dataState  = fs.String("data-state", "final", "data state: final,all,hourly_all")
+		dimension  = fs.String("dimension", "page", "comparison dimension: page or query")
+	)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if err := base.Resolve(true); err != nil {
+		return err
+	}
+
+	dim := strings.ToLower(strings.TrimSpace(*dimension))
+	if dim != "page" && dim != "query" {
+		return errors.New("dimension must be page or query")
+	}
+	dayWindow, err := cfg.ParseDayWindow(*days)
+	if err != nil {
+		return err
+	}
+	currentRange, err := cfg.ResolveDateRangeWithDays(*startDate, *endDate, dayWindow)
+	if err != nil {
+		return err
+	}
+	previousRange, err := cfg.PreviousDateRange(currentRange)
+	if err != nil {
+		return err
+	}
+
+	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	if err != nil {
+		return err
+	}
+	currentReq, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{
+		StartDate:  currentRange.Start,
+		EndDate:    currentRange.End,
+		Dimensions: dim,
+		SearchType: *searchType,
+		DataState:  *dataState,
+		Limit:      *limit,
+	})
+	if err != nil {
+		return err
+	}
+	previousReq, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{
+		StartDate:  previousRange.Start,
+		EndDate:    previousRange.End,
+		Dimensions: dim,
+		SearchType: *searchType,
+		DataState:  *dataState,
+		Limit:      *limit,
+	})
+	if err != nil {
+		return err
+	}
+
+	currentResult, err := client.QueryAnalytics(ctx, base.Site, currentReq)
+	if err != nil {
+		return err
+	}
+	previousResult, err := client.QueryAnalytics(ctx, base.Site, previousReq)
+	if err != nil {
+		return err
+	}
+
+	currentImpressions, currentClicks := sumAnalyticsRows(currentResult.Rows)
+	previousImpressions, previousClicks := sumAnalyticsRows(previousResult.Rows)
+	report := gsc.CompareReport{
+		Site:      base.Site,
+		Dimension: strings.ToUpper(dim),
+		Summary: gsc.CompareSummary{
+			CurrentStart:        currentRange.Start,
+			CurrentEnd:          currentRange.End,
+			PreviousStart:       previousRange.Start,
+			PreviousEnd:         previousRange.End,
+			CurrentRows:         len(currentResult.Rows),
+			PreviousRows:        len(previousResult.Rows),
+			CurrentImpressions:  currentImpressions,
+			PreviousImpressions: previousImpressions,
+			CurrentClicks:       currentClicks,
+			PreviousClicks:      previousClicks,
+			ImpressionDelta:     currentImpressions - previousImpressions,
+			ClickDelta:          currentClicks - previousClicks,
+		},
+		Current:  currentResult,
+		Previous: previousResult,
+	}
+	return renderCompare(base.Output, report)
 }
 
 func runDoctor(ctx context.Context, args []string) error {
@@ -515,7 +646,10 @@ Usage:
   gsc-cli analytics top-pages [flags]
   gsc-cli analytics top-queries [flags]
   gsc-cli doctor [flags]
+  gsc-cli help <topic>
+  gsc-cli help <topic> <subcommand>
   gsc-cli report overview [flags]
+  gsc-cli report compare [flags]
   gsc-cli sitemaps list [flags]
   gsc-cli inspect url [flags]
   gsc-cli version [flags]
@@ -527,6 +661,7 @@ Commands:
   analytics top-queries  Fast top-queries report
   doctor                 Check credentials, property visibility, and site access
   report overview        One-shot operator snapshot: pages, queries, sitemap, inspection
+  report compare         Compare current period vs previous equal period
   sitemaps list          List sitemap status for a property
   inspect url            Inspect one URL for indexing state
   version                Print build and version information
@@ -537,7 +672,9 @@ Examples:
   gsc-cli analytics top-pages --credentials-file service-account.json --site sc-domain:example.com --output table
   gsc-cli analytics top-queries --credentials-file service-account.json --site sc-domain:example.com --output table
   gsc-cli doctor --credentials-file service-account.json --site sc-domain:example.com --output table
+  gsc-cli help analytics query
   gsc-cli report overview --credentials-file service-account.json --site sc-domain:example.com --days 28 --output table
+  gsc-cli report compare --credentials-file service-account.json --site sc-domain:example.com --days 28 --dimension page --output table
   gsc-cli sitemaps list --credentials-file service-account.json --site sc-domain:example.com
   gsc-cli inspect url --credentials-file service-account.json --site sc-domain:example.com --url https://example.com/
   gsc-cli version --output json
@@ -553,6 +690,7 @@ Usage:
   gsc-cli analytics query [flags]
   gsc-cli analytics top-pages [flags]
   gsc-cli analytics top-queries [flags]
+  gsc-cli help analytics <subcommand>
 
 Recommended:
   Start with top-pages or top-queries.
@@ -567,6 +705,8 @@ gsc-cli report
 
 Usage:
   gsc-cli report overview [flags]
+  gsc-cli report compare [flags]
+  gsc-cli help report <subcommand>
 
 Recommended:
   Start here for a cold read on a property.

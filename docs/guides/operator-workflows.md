@@ -65,6 +65,30 @@ The overview report includes:
 
 If `--inspect-url` is not supplied, `gsc-cli` infers a homepage URL from the configured property when possible.
 
+## Compare Report
+
+Use this when you want to know whether visibility is improving or declining
+versus the previous equal period:
+
+```bash
+gsc-cli report compare --days 28 --dimension page --limit 10 --output table
+```
+
+You can also compare query visibility:
+
+```bash
+gsc-cli report compare --days 28 --dimension query --limit 10 --output table
+```
+
+## Deep Help
+
+Use topic help when an agent or operator needs a command without opening the docs:
+
+```bash
+gsc-cli help analytics query
+gsc-cli help report compare
+```
+
 ## Doctor
 
 Check whether credentials, visible properties, and the configured site are usable:

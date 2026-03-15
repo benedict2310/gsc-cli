@@ -234,6 +234,24 @@ func ParseDayWindow(value string) (int, error) {
 	}
 }
 
+func PreviousDateRange(current DateRange) (DateRange, error) {
+	start, err := time.Parse("2006-01-02", current.Start)
+	if err != nil {
+		return DateRange{}, fmt.Errorf("parse current start date: %w", err)
+	}
+	end, err := time.Parse("2006-01-02", current.End)
+	if err != nil {
+		return DateRange{}, fmt.Errorf("parse current end date: %w", err)
+	}
+	days := int(end.Sub(start).Hours()/24) + 1
+	prevEnd := start.AddDate(0, 0, -1)
+	prevStart := prevEnd.AddDate(0, 0, -(days - 1))
+	return DateRange{
+		Start: prevStart.Format("2006-01-02"),
+		End:   prevEnd.Format("2006-01-02"),
+	}, nil
+}
+
 func InferInspectionURL(site string) (string, error) {
 	site = strings.TrimSpace(site)
 	if site == "" {

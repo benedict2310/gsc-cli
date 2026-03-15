@@ -54,3 +54,12 @@ func TestRunQueryHelpReturnsFlagErrHelp(t *testing.T) {
 		t.Fatalf("run() = %v", err)
 	}
 }
+
+func TestRunHelpAnalyticsQueryReturnsFlagErrHelp(t *testing.T) {
+	t.Parallel()
+
+	err := runHelp([]string{"analytics", "query"})
+	if !errors.Is(err, flag.ErrHelp) {
+		t.Fatalf("runHelp() = %v", err)
+	}
+}

@@ -187,3 +187,16 @@ func TestParseDayWindow(t *testing.T) {
 		})
 	}
 }
+
+func TestPreviousDateRange(t *testing.T) {
+	got, err := PreviousDateRange(DateRange{
+		Start: "2026-02-15",
+		End:   "2026-03-14",
+	})
+	if err != nil {
+		t.Fatalf("PreviousDateRange() error = %v", err)
+	}
+	if got.Start != "2026-01-18" || got.End != "2026-02-14" {
+		t.Fatalf("PreviousDateRange() = %#v", got)
+	}
+}

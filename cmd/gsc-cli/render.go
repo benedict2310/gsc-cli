@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"text/tabwriter"
 
 	cfg "github.com/bbleimschein/gsc-cli/internal/config"
@@ -52,6 +54,36 @@ func renderDoctor(mode string, report doctorReport) error {
 	return tw.Flush()
 }
 
+func renderCompare(mode string, report gsc.CompareReport) error {
+	if mode == cfg.OutputJSON {
+		return writeJSON(os.Stdout, report)
+	}
+	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "FIELD\tVALUE")
+	fmt.Fprintf(tw, "SITE\t%s\n", report.Site)
+	fmt.Fprintf(tw, "DIMENSION\t%s\n", report.Dimension)
+	fmt.Fprintf(tw, "CURRENT_RANGE\t%s to %s\n", report.Summary.CurrentStart, report.Summary.CurrentEnd)
+	fmt.Fprintf(tw, "PREVIOUS_RANGE\t%s to %s\n", report.Summary.PreviousStart, report.Summary.PreviousEnd)
+	fmt.Fprintf(tw, "CURRENT_ROWS\t%d\n", report.Summary.CurrentRows)
+	fmt.Fprintf(tw, "PREVIOUS_ROWS\t%d\n", report.Summary.PreviousRows)
+	fmt.Fprintf(tw, "CURRENT_IMPRESSIONS\t%.0f\n", report.Summary.CurrentImpressions)
+	fmt.Fprintf(tw, "PREVIOUS_IMPRESSIONS\t%.0f\n", report.Summary.PreviousImpressions)
+	fmt.Fprintf(tw, "IMPRESSION_DELTA\t%.0f\n", report.Summary.ImpressionDelta)
+	fmt.Fprintf(tw, "CURRENT_CLICKS\t%.0f\n", report.Summary.CurrentClicks)
+	fmt.Fprintf(tw, "PREVIOUS_CLICKS\t%.0f\n", report.Summary.PreviousClicks)
+	fmt.Fprintf(tw, "CLICK_DELTA\t%.0f\n", report.Summary.ClickDelta)
+	_ = tw.Flush()
+
+	fmt.Fprintln(os.Stdout)
+	fmt.Fprintln(os.Stdout, "CURRENT")
+	if err := renderAnalyticsTable(report.Current); err != nil {
+		return err
+	}
+	fmt.Fprintln(os.Stdout)
+	fmt.Fprintln(os.Stdout, "PREVIOUS")
+	return renderAnalyticsTable(report.Previous)
+}
+
 func writeJSON(w *os.File, value any) error {
 	encoder := json.NewEncoder(w)
 	encoder.SetEscapeHTML(false)
@@ -73,4 +105,35 @@ func hasSite(sites []gsc.Site, target string) bool {
 		}
 	}
 	return false
+}
+
+func sumAnalyticsRows(rows []gsc.AnalyticsRow) (float64, float64) {
+	var impressions float64
+	var clicks float64
+	for _, row := range rows {
+		impressions += row.Impressions
+		clicks += row.Clicks
+	}
+	return impressions, clicks
+}
+
+func renderAnalyticsTable(result *gsc.AnalyticsResult) error {
+	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	headers := append(append([]string{}, result.Dimensions...), "CLICKS", "IMPRESSIONS", "CTR", "POSITION")
+	fmt.Fprintln(tw, strings.Join(headers, "\t"))
+	for _, row := range result.Rows {
+		values := append([]string{}, row.Keys...)
+		values = append(values,
+			formatFloat(row.Clicks),
+			formatFloat(row.Impressions),
+			formatFloat(row.CTR),
+			formatFloat(row.Position),
+		)
+		fmt.Fprintln(tw, strings.Join(values, "\t"))
+	}
+	return tw.Flush()
+}
+
+func formatFloat(value float64) string {
+	return strconv.FormatFloat(value, 'f', -1, 64)
 }

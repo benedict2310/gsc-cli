@@ -15,7 +15,9 @@ It is intentionally narrow:
 - `gsc-cli analytics query`
 - `gsc-cli analytics top-pages`
 - `gsc-cli analytics top-queries`
+- `gsc-cli help <topic>`
 - `gsc-cli report overview`
+- `gsc-cli report compare`
 - `gsc-cli sitemaps list`
 - `gsc-cli inspect url`
 
@@ -110,6 +112,19 @@ gsc-cli report overview \
 ```
 
 ```bash
+gsc-cli report compare \
+  --credentials-file ./service-account.json \
+  --site sc-domain:example.com \
+  --days 28 \
+  --dimension page \
+  --output table
+```
+
+```bash
+gsc-cli help analytics query
+```
+
+```bash
 gsc-cli sitemaps list \
   --credentials-file ./service-account.json \
   --site sc-domain:example.com
@@ -156,6 +171,10 @@ For `top-pages`, `top-queries`, and `report overview`:
 - `--days` supports `7`, `28`, or `90`
 - default is `28`
 - explicit `--start` and `--end` take precedence over `--days`
+
+For `report compare`:
+- compares the current period against the immediately preceding equal-length period
+- supports `--dimension page` and `--dimension query`
 
 ## Validation
 

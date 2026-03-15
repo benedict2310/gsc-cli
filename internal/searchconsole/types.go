@@ -58,3 +58,26 @@ type OverviewReport struct {
 	Sitemaps   []Sitemap         `json:"sitemaps"`
 	Inspection *InspectionResult `json:"inspection"`
 }
+
+type CompareSummary struct {
+	CurrentStart        string  `json:"currentStart"`
+	CurrentEnd          string  `json:"currentEnd"`
+	PreviousStart       string  `json:"previousStart"`
+	PreviousEnd         string  `json:"previousEnd"`
+	CurrentRows         int     `json:"currentRows"`
+	PreviousRows        int     `json:"previousRows"`
+	CurrentImpressions  float64 `json:"currentImpressions"`
+	PreviousImpressions float64 `json:"previousImpressions"`
+	CurrentClicks       float64 `json:"currentClicks"`
+	PreviousClicks      float64 `json:"previousClicks"`
+	ImpressionDelta     float64 `json:"impressionDelta"`
+	ClickDelta          float64 `json:"clickDelta"`
+}
+
+type CompareReport struct {
+	Site      string           `json:"site"`
+	Dimension string           `json:"dimension"`
+	Summary   CompareSummary   `json:"summary"`
+	Current   *AnalyticsResult `json:"current"`
+	Previous  *AnalyticsResult `json:"previous"`
+}
