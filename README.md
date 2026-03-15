@@ -28,7 +28,7 @@ It is intentionally narrow:
 5. Add the service account email as a user on the Search Console property you want to query.
 
 Recommended property format:
-- `sc-domain:futurelab.studio`
+- `sc-domain:example.com`
 
 Keep the service-account JSON key out of the repository. The project `.gitignore`
 already excludes common local key filenames such as `service-account*.json`.
@@ -55,6 +55,17 @@ command -v gsc-cli
 gsc-cli --help
 ```
 
+## Start Here
+
+If you only know the property and credentials, start with:
+
+```bash
+gsc-cli report overview \
+  --credentials-file ./service-account.json \
+  --site sc-domain:example.com \
+  --output table
+```
+
 ## Usage
 
 You can pass credentials and site on the command line:
@@ -67,7 +78,7 @@ gsc-cli sites list \
 ```bash
 gsc-cli analytics query \
   --credentials-file ./service-account.json \
-  --site sc-domain:futurelab.studio \
+  --site sc-domain:example.com \
   --start 2026-03-01 \
   --end 2026-03-14 \
   --dimensions query,page \
@@ -78,21 +89,21 @@ gsc-cli analytics query \
 ```bash
 gsc-cli analytics top-pages \
   --credentials-file ./service-account.json \
-  --site sc-domain:futurelab.studio \
+  --site sc-domain:example.com \
   --output table
 ```
 
 ```bash
 gsc-cli analytics top-queries \
   --credentials-file ./service-account.json \
-  --site sc-domain:futurelab.studio \
+  --site sc-domain:example.com \
   --output table
 ```
 
 ```bash
 gsc-cli report overview \
   --credentials-file ./service-account.json \
-  --site sc-domain:futurelab.studio \
+  --site sc-domain:example.com \
   --days 28 \
   --limit 10 \
   --output table
@@ -101,21 +112,32 @@ gsc-cli report overview \
 ```bash
 gsc-cli sitemaps list \
   --credentials-file ./service-account.json \
-  --site sc-domain:futurelab.studio
+  --site sc-domain:example.com
 ```
 
 ```bash
 gsc-cli inspect url \
   --credentials-file ./service-account.json \
-  --site sc-domain:futurelab.studio \
-  --url https://futurelab.studio/
+  --site sc-domain:example.com \
+  --url https://example.com/
+```
+
+```bash
+gsc-cli doctor \
+  --credentials-file ./service-account.json \
+  --site sc-domain:example.com \
+  --output table
+```
+
+```bash
+gsc-cli version --output json
 ```
 
 You can also use environment variables:
 
 ```bash
 export GSC_CLI_CREDENTIALS_FILE=./service-account.json
-export GSC_CLI_SITE_URL=sc-domain:futurelab.studio
+export GSC_CLI_SITE_URL=sc-domain:example.com
 ```
 
 Then run:
@@ -133,7 +155,7 @@ Supported output modes:
 For `top-pages`, `top-queries`, and `report overview`:
 - `--days` supports `7`, `28`, or `90`
 - default is `28`
-- `--days` cannot be combined with `--start` or `--end`
+- explicit `--start` and `--end` take precedence over `--days`
 
 ## Validation
 

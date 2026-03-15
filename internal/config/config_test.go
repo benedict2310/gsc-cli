@@ -155,3 +155,35 @@ func TestInferInspectionURLFromDomainProperty(t *testing.T) {
 		t.Fatalf("InferInspectionURL() = %q", got)
 	}
 }
+
+func TestParseDayWindow(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    int
+		wantErr bool
+	}{
+		{name: "empty", input: "", want: 0},
+		{name: "seven", input: "7", want: 7},
+		{name: "twenty eight", input: "28", want: 28},
+		{name: "invalid", input: "30", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseDayWindow(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("ParseDayWindow() expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ParseDayWindow() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("ParseDayWindow() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}

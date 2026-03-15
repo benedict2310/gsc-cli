@@ -5,8 +5,8 @@ This guide documents the fastest recurring workflows for `gsc-cli`.
 ## Environment
 
 ```bash
-export GSC_CLI_CREDENTIALS_FILE=/Users/bene/Dev-Source-NoBackup/gsc-cli/service-account.futurelab.local.json
-export GSC_CLI_SITE_URL=sc-domain:futurelab.studio
+export GSC_CLI_CREDENTIALS_FILE="$HOME/.config/gsc-cli/service-account.json"
+export GSC_CLI_SITE_URL="sc-domain:example.com"
 ```
 
 ## System Install
@@ -64,3 +64,19 @@ The overview report includes:
 - one URL inspection
 
 If `--inspect-url` is not supplied, `gsc-cli` infers a homepage URL from the configured property when possible.
+
+## Doctor
+
+Check whether credentials, visible properties, and the configured site are usable:
+
+```bash
+gsc-cli doctor --output table
+```
+
+## Version
+
+Print build metadata in machine-readable form:
+
+```bash
+gsc-cli version --output json
+```

@@ -90,10 +90,10 @@ func (c *Common) Resolve(requireSite bool) error {
 		return err
 	}
 	if requireSite && strings.TrimSpace(c.Site) == "" {
-		return errors.New("site is required")
+		return errors.New("site is required; pass --site or set GSC_CLI_SITE_URL")
 	}
 	if _, ok := allowedOutputs[c.Output]; !ok {
-		return fmt.Errorf("unsupported output mode %q", c.Output)
+		return fmt.Errorf("unsupported output mode %q; supported values are json and table", c.Output)
 	}
 	return nil
 }
@@ -217,6 +217,23 @@ func ResolveDateRangeWithDays(startDate, endDate string, days int) (DateRange, e
 	}, nil
 }
 
+func ParseDayWindow(value string) (int, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, nil
+	}
+	switch value {
+	case "7":
+		return 7, nil
+	case "28":
+		return 28, nil
+	case "90":
+		return 90, nil
+	default:
+		return 0, errors.New("days must be one of 7, 28, or 90")
+	}
+}
+
 func InferInspectionURL(site string) (string, error) {
 	site = strings.TrimSpace(site)
 	if site == "" {
@@ -295,7 +312,7 @@ func validateDate(value string) error {
 func validateCredentialsFile(path string) error {
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return errors.New("credentials file is required")
+		return errors.New("credentials file is required; pass --credentials-file or set GSC_CLI_CREDENTIALS_FILE")
 	}
 	info, err := os.Stat(path)
 	if err != nil {
