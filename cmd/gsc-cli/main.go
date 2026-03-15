@@ -32,6 +32,8 @@ func run(ctx context.Context, args []string) error {
 		return runSites(ctx, args[1:])
 	case "analytics":
 		return runAnalytics(ctx, args[1:])
+	case "report":
+		return runReport(ctx, args[1:])
 	case "sitemaps":
 		return runSitemaps(ctx, args[1:])
 	case "inspect":
@@ -148,6 +150,7 @@ func runAnalyticsTop(ctx context.Context, args []string, dimension string) error
 	var (
 		startDate  = fs.String("start", "", "start date in YYYY-MM-DD; defaults to a recent 28-day window ending yesterday")
 		endDate    = fs.String("end", "", "end date in YYYY-MM-DD; defaults to a recent 28-day window ending yesterday")
+		days       = fs.Int("days", 28, "shortcut window in days: 7, 28, or 90")
 		searchType = fs.String("search-type", "web", "search type: web,image,video,news,discover,google_news")
 		dataState  = fs.String("data-state", "final", "data state: final,all,hourly_all")
 		limit      = fs.Int64("limit", 10, "maximum rows to return (1-25000)")
@@ -159,7 +162,7 @@ func runAnalyticsTop(ctx context.Context, args []string, dimension string) error
 		return err
 	}
 
-	dateRange, err := cfg.ResolveDateRange(*startDate, *endDate)
+	dateRange, err := cfg.ResolveDateRangeWithDays(*startDate, *endDate, *days)
 	if err != nil {
 		return err
 	}
@@ -186,6 +189,108 @@ func runAnalyticsTop(ctx context.Context, args []string, dimension string) error
 		return err
 	}
 	return output.RenderAnalytics(os.Stdout, base.Output, result)
+}
+
+func runReport(ctx context.Context, args []string) error {
+	if len(args) == 0 || args[0] != "overview" {
+		return errors.New("usage: gsc-cli report overview [flags]")
+	}
+
+	fs := flag.NewFlagSet("report overview", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	base := bindCommonFlags(fs)
+	var (
+		startDate  = fs.String("start", "", "start date in YYYY-MM-DD")
+		endDate    = fs.String("end", "", "end date in YYYY-MM-DD")
+		days       = fs.Int("days", 28, "shortcut window in days: 7, 28, or 90")
+		limit      = fs.Int64("limit", 10, "maximum rows for top pages and top queries (1-25000)")
+		searchType = fs.String("search-type", "web", "search type: web,image,video,news,discover,google_news")
+		dataState  = fs.String("data-state", "final", "data state: final,all,hourly_all")
+		inspectURL = fs.String("inspect-url", "", "URL to inspect; inferred from site when omitted")
+	)
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	if err := base.Resolve(true); err != nil {
+		return err
+	}
+
+	dateRange, err := cfg.ResolveDateRangeWithDays(*startDate, *endDate, *days)
+	if err != nil {
+		return err
+	}
+	targetURL := strings.TrimSpace(*inspectURL)
+	if targetURL == "" {
+		targetURL, err = cfg.InferInspectionURL(base.Site)
+		if err != nil {
+			return err
+		}
+	}
+
+	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	if err != nil {
+		return err
+	}
+
+	topPagesReq, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{
+		StartDate:  dateRange.Start,
+		EndDate:    dateRange.End,
+		Dimensions: "page",
+		SearchType: *searchType,
+		DataState:  *dataState,
+		Limit:      *limit,
+	})
+	if err != nil {
+		return err
+	}
+	topQueriesReq, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{
+		StartDate:  dateRange.Start,
+		EndDate:    dateRange.End,
+		Dimensions: "query",
+		SearchType: *searchType,
+		DataState:  *dataState,
+		Limit:      *limit,
+	})
+	if err != nil {
+		return err
+	}
+	inspectionReq, err := cfg.BuildInspectRequest(cfg.InspectInput{
+		Site:         base.Site,
+		URL:          targetURL,
+		LanguageCode: "en-US",
+	})
+	if err != nil {
+		return err
+	}
+
+	topPages, err := client.QueryAnalytics(ctx, base.Site, topPagesReq)
+	if err != nil {
+		return err
+	}
+	topQueries, err := client.QueryAnalytics(ctx, base.Site, topQueriesReq)
+	if err != nil {
+		return err
+	}
+	sitemaps, err := client.ListSitemaps(ctx, base.Site)
+	if err != nil {
+		return err
+	}
+	inspection, err := client.InspectURL(ctx, inspectionReq)
+	if err != nil {
+		return err
+	}
+
+	report := &gsc.OverviewReport{
+		Site:       base.Site,
+		StartDate:  dateRange.Start,
+		EndDate:    dateRange.End,
+		InspectURL: targetURL,
+		TopPages:   topPages,
+		TopQueries: topQueries,
+		Sitemaps:   sitemaps,
+		Inspection: inspection,
+	}
+	return output.RenderOverview(os.Stdout, base.Output, report)
 }
 
 func runSitemaps(ctx context.Context, args []string) error {
@@ -272,6 +377,7 @@ Usage:
   gsc-cli analytics query [flags]
   gsc-cli analytics top-pages [flags]
   gsc-cli analytics top-queries [flags]
+  gsc-cli report overview [flags]
   gsc-cli sitemaps list [flags]
   gsc-cli inspect url [flags]
 
@@ -280,6 +386,7 @@ Examples:
   gsc-cli analytics query --credentials-file service-account.json --site sc-domain:futurelab.studio --start %s --end %s
   gsc-cli analytics top-pages --credentials-file service-account.json --site sc-domain:futurelab.studio --output table
   gsc-cli analytics top-queries --credentials-file service-account.json --site sc-domain:futurelab.studio --output table
+  gsc-cli report overview --credentials-file service-account.json --site sc-domain:futurelab.studio --days 28 --output table
   gsc-cli sitemaps list --credentials-file service-account.json --site sc-domain:futurelab.studio
   gsc-cli inspect url --credentials-file service-account.json --site sc-domain:futurelab.studio --url https://futurelab.studio/
 `, time.Now().AddDate(0, 0, -7).Format("2006-01-02"), time.Now().Format("2006-01-02"))))

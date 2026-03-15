@@ -47,3 +47,14 @@ type InspectionResult struct {
 	Sitemaps             []string `json:"sitemaps,omitempty"`
 	InspectionResultLink string   `json:"inspectionResultLink,omitempty"`
 }
+
+type OverviewReport struct {
+	Site       string            `json:"site"`
+	StartDate  string            `json:"startDate"`
+	EndDate    string            `json:"endDate"`
+	InspectURL string            `json:"inspectUrl"`
+	TopPages   *AnalyticsResult  `json:"topPages"`
+	TopQueries *AnalyticsResult  `json:"topQueries"`
+	Sitemaps   []Sitemap         `json:"sitemaps"`
+	Inspection *InspectionResult `json:"inspection"`
+}

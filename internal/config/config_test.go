@@ -131,3 +131,27 @@ func TestResolveDateRangeRequiresBothDates(t *testing.T) {
 		t.Fatal("ResolveDateRange() expected error for partial range")
 	}
 }
+
+func TestResolveDateRangeWithDaysRejectsMixedInputs(t *testing.T) {
+	_, err := ResolveDateRangeWithDays("2026-03-01", "2026-03-14", 28)
+	if err == nil {
+		t.Fatal("ResolveDateRangeWithDays() expected mixed-input error")
+	}
+}
+
+func TestResolveDateRangeWithDaysRejectsUnsupportedWindow(t *testing.T) {
+	_, err := ResolveDateRangeWithDays("", "", 30)
+	if err == nil {
+		t.Fatal("ResolveDateRangeWithDays() expected unsupported days error")
+	}
+}
+
+func TestInferInspectionURLFromDomainProperty(t *testing.T) {
+	got, err := InferInspectionURL("sc-domain:futurelab.studio")
+	if err != nil {
+		t.Fatalf("InferInspectionURL() error = %v", err)
+	}
+	if got != "https://futurelab.studio/" {
+		t.Fatalf("InferInspectionURL() = %q", got)
+	}
+}

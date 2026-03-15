@@ -75,6 +75,12 @@ type DateRange struct {
 	End   string
 }
 
+var allowedDayWindows = map[int]int{
+	7:  7,
+	28: 28,
+	90: 90,
+}
+
 func (c *Common) Resolve(requireSite bool) error {
 	c.CredentialsFile = firstNonEmpty(c.CredentialsFile, os.Getenv(envCredentialsFile))
 	c.Site = firstNonEmpty(c.Site, os.Getenv(envSiteURL))
@@ -187,6 +193,49 @@ func ResolveDateRange(startDate, endDate string) (DateRange, error) {
 		return DateRange{}, errors.New("start date must be less than or equal to end date")
 	}
 	return DateRange{Start: startDate, End: endDate}, nil
+}
+
+func ResolveDateRangeWithDays(startDate, endDate string, days int) (DateRange, error) {
+	startDate = strings.TrimSpace(startDate)
+	endDate = strings.TrimSpace(endDate)
+
+	if days != 0 && (startDate != "" || endDate != "") {
+		return DateRange{}, errors.New("days cannot be combined with start or end dates")
+	}
+	if days == 0 {
+		return ResolveDateRange(startDate, endDate)
+	}
+	if _, ok := allowedDayWindows[days]; !ok {
+		return DateRange{}, errors.New("days must be one of 7, 28, or 90")
+	}
+
+	end := time.Now().AddDate(0, 0, -1)
+	start := end.AddDate(0, 0, -(days - 1))
+	return DateRange{
+		Start: start.Format("2006-01-02"),
+		End:   end.Format("2006-01-02"),
+	}, nil
+}
+
+func InferInspectionURL(site string) (string, error) {
+	site = strings.TrimSpace(site)
+	if site == "" {
+		return "", errors.New("site is required")
+	}
+	if strings.HasPrefix(site, "sc-domain:") {
+		domain := strings.TrimPrefix(site, "sc-domain:")
+		if domain == "" {
+			return "", errors.New("invalid domain property")
+		}
+		return "https://" + domain + "/", nil
+	}
+	if looksLikeURL(site) {
+		if strings.HasSuffix(site, "/") {
+			return site, nil
+		}
+		return site + "/", nil
+	}
+	return "", errors.New("unable to infer inspection URL from site")
 }
 
 func parseDimensions(value string) ([]string, error) {

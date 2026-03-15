@@ -97,6 +97,39 @@ func RenderInspection(w io.Writer, mode string, result *gsc.InspectionResult) er
 	return tw.Flush()
 }
 
+func RenderOverview(w io.Writer, mode string, report *gsc.OverviewReport) error {
+	if mode == cfg.OutputJSON {
+		return writeJSON(w, report)
+	}
+
+	tw := newWriter(w)
+	fmt.Fprintln(tw, "FIELD\tVALUE")
+	fmt.Fprintf(tw, "SITE\t%s\n", report.Site)
+	fmt.Fprintf(tw, "START_DATE\t%s\n", report.StartDate)
+	fmt.Fprintf(tw, "END_DATE\t%s\n", report.EndDate)
+	fmt.Fprintf(tw, "INSPECT_URL\t%s\n", report.InspectURL)
+	_ = tw.Flush()
+
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "TOP_PAGES")
+	if err := RenderAnalytics(w, cfg.OutputTable, report.TopPages); err != nil {
+		return err
+	}
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "TOP_QUERIES")
+	if err := RenderAnalytics(w, cfg.OutputTable, report.TopQueries); err != nil {
+		return err
+	}
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "SITEMAPS")
+	if err := RenderSitemaps(w, cfg.OutputTable, report.Sitemaps); err != nil {
+		return err
+	}
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "INSPECTION")
+	return RenderInspection(w, cfg.OutputTable, report.Inspection)
+}
+
 func writeJSON(w io.Writer, value any) error {
 	encoder := json.NewEncoder(w)
 	encoder.SetEscapeHTML(false)

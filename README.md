@@ -15,6 +15,7 @@ It is intentionally narrow:
 - `gsc-cli analytics query`
 - `gsc-cli analytics top-pages`
 - `gsc-cli analytics top-queries`
+- `gsc-cli report overview`
 - `gsc-cli sitemaps list`
 - `gsc-cli inspect url`
 
@@ -73,6 +74,15 @@ gsc-cli analytics top-queries \
 ```
 
 ```bash
+gsc-cli report overview \
+  --credentials-file ./service-account.json \
+  --site sc-domain:futurelab.studio \
+  --days 28 \
+  --limit 10 \
+  --output table
+```
+
+```bash
 gsc-cli sitemaps list \
   --credentials-file ./service-account.json \
   --site sc-domain:futurelab.studio
@@ -104,8 +114,10 @@ Supported output modes:
 - `json` (default)
 - `table`
 
-For `top-pages` and `top-queries`, omitting `--start` and `--end` uses a recent
-28-day window ending yesterday.
+For `top-pages`, `top-queries`, and `report overview`:
+- `--days` supports `7`, `28`, or `90`
+- default is `28`
+- `--days` cannot be combined with `--start` or `--end`
 
 ## Validation
 
