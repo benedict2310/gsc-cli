@@ -14,7 +14,7 @@ export GSC_CLI_SITE_URL="sc-domain:example.com"
 Build and install to the Homebrew prefix bin directory:
 
 ```bash
-cd /Users/bene/Dev-Source-NoBackup/gsc-cli
+cd /path/to/gsc-cli
 go build -o ./gsc-cli ./cmd/gsc-cli
 install -m 755 ./gsc-cli "$(brew --prefix)/bin/gsc-cli"
 ```

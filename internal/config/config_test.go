@@ -8,7 +8,7 @@ import (
 
 func TestCommonResolveUsesEnvFallbacks(t *testing.T) {
 	t.Setenv(envCredentialsFile, filepath.Join(t.TempDir(), "service-account.json"))
-	t.Setenv(envSiteURL, "sc-domain:futurelab.studio")
+	t.Setenv(envSiteURL, "sc-domain:example.com")
 	if err := os.WriteFile(os.Getenv(envCredentialsFile), []byte("{}"), 0o600); err != nil {
 		t.Fatalf("write credentials file: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestCommonResolveRejectsUnsupportedOutput(t *testing.T) {
 	}
 	cfg := &Common{
 		CredentialsFile: path,
-		Site:            "sc-domain:futurelab.studio",
+		Site:            "sc-domain:example.com",
 		Output:          "yaml",
 	}
 	if err := cfg.Resolve(true); err == nil {
@@ -107,8 +107,8 @@ func TestBuildAnalyticsRequestNormalizesValues(t *testing.T) {
 
 func TestBuildInspectRequestRejectsBadURL(t *testing.T) {
 	_, err := BuildInspectRequest(InspectInput{
-		Site: "sc-domain:futurelab.studio",
-		URL:  "futurelab.studio",
+		Site: "sc-domain:example.com",
+		URL:  "example.com",
 	})
 	if err == nil {
 		t.Fatal("BuildInspectRequest() expected URL validation error")
@@ -147,11 +147,11 @@ func TestResolveDateRangeWithDaysRejectsUnsupportedWindow(t *testing.T) {
 }
 
 func TestInferInspectionURLFromDomainProperty(t *testing.T) {
-	got, err := InferInspectionURL("sc-domain:futurelab.studio")
+	got, err := InferInspectionURL("sc-domain:example.com")
 	if err != nil {
 		t.Fatalf("InferInspectionURL() error = %v", err)
 	}
-	if got != "https://futurelab.studio/" {
+	if got != "https://example.com/" {
 		t.Fatalf("InferInspectionURL() = %q", got)
 	}
 }

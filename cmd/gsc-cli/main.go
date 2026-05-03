@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	cfg "github.com/bbleimschein/gsc-cli/internal/config"
-	"github.com/bbleimschein/gsc-cli/internal/output"
-	gsc "github.com/bbleimschein/gsc-cli/internal/searchconsole"
+	cfg "github.com/benedict2310/gsc-cli/internal/config"
+	"github.com/benedict2310/gsc-cli/internal/output"
+	gsc "github.com/benedict2310/gsc-cli/internal/searchconsole"
 )
 
 var (
@@ -475,7 +475,7 @@ func runDoctor(ctx context.Context, args []string) error {
 		Version: buildVersion,
 		Site:    base.Site,
 		Checks: []doctorCheck{
-			{Name: "credentials_file", Status: "PASS", Detail: base.CredentialsFile},
+			{Name: "credentials_file", Status: "PASS", Detail: credentialDetail(base.CredentialsFile)},
 		},
 	}
 
@@ -625,10 +625,17 @@ func runInspect(ctx context.Context, args []string) error {
 	return output.RenderInspection(os.Stdout, base.Output, result)
 }
 
+func credentialDetail(path string) string {
+	if strings.TrimSpace(path) == "" {
+		return ""
+	}
+	return "<provided>"
+}
+
 func bindCommonFlags(fs *flag.FlagSet) *cfg.Common {
 	base := &cfg.Common{}
 	fs.StringVar(&base.CredentialsFile, "credentials-file", "", "path to a Google service account JSON file")
-	fs.StringVar(&base.Site, "site", "", "Search Console property, for example sc-domain:futurelab.studio")
+	fs.StringVar(&base.Site, "site", "", "Search Console property, for example sc-domain:example.com")
 	fs.StringVar(&base.Output, "output", cfg.OutputJSON, "output mode: json or table")
 	return base
 }

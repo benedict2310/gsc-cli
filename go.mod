@@ -1,4 +1,4 @@
-module github.com/bbleimschein/gsc-cli
+module github.com/benedict2310/gsc-cli
 
 go 1.25.0
 

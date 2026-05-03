@@ -4,8 +4,6 @@ Project documentation for the standalone read-only Google Search Console CLI.
 
 ## Contents
 
-- `stories/`
-  - implementation history and acceptance criteria
 - `guides/`
   - operator-facing usage guides
 
@@ -21,6 +19,6 @@ Project documentation for the standalone read-only Google Search Console CLI.
 
 ## Installation
 
-Local system-wide install target on this machine:
+System-wide install target:
 
 - `$(brew --prefix)/bin/gsc-cli`

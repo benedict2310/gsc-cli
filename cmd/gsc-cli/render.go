@@ -8,8 +8,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	cfg "github.com/bbleimschein/gsc-cli/internal/config"
-	gsc "github.com/bbleimschein/gsc-cli/internal/searchconsole"
+	cfg "github.com/benedict2310/gsc-cli/internal/config"
+	gsc "github.com/benedict2310/gsc-cli/internal/searchconsole"
 )
 
 type versionInfo struct {

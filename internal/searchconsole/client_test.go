@@ -45,7 +45,7 @@ func TestQueryAnalyticsShapesRequest(t *testing.T) {
 		SearchType: "WEB",
 		RowLimit:   100,
 	}
-	result, err := client.QueryAnalytics(context.Background(), "sc-domain:futurelab.studio", req)
+	result, err := client.QueryAnalytics(context.Background(), "sc-domain:example.com", req)
 	if err != nil {
 		t.Fatalf("QueryAnalytics() error = %v", err)
 	}
@@ -53,7 +53,7 @@ func TestQueryAnalyticsShapesRequest(t *testing.T) {
 	if gotMethod != http.MethodPost {
 		t.Fatalf("method = %s, want POST", gotMethod)
 	}
-	if !strings.Contains(gotPath, "/sites/sc-domain:futurelab.studio/searchAnalytics/query") {
+	if !strings.Contains(gotPath, "/sites/sc-domain:example.com/searchAnalytics/query") {
 		t.Fatalf("path = %q", gotPath)
 	}
 	if gotBody.StartDate != "2026-03-01" || gotBody.RowLimit != 100 {
@@ -92,15 +92,15 @@ func TestInspectURLShapesRequest(t *testing.T) {
 	}
 
 	result, err := client.InspectURL(context.Background(), &gscapi.InspectUrlIndexRequest{
-		SiteUrl:       "sc-domain:futurelab.studio",
-		InspectionUrl: "https://futurelab.studio/",
+		SiteUrl:       "sc-domain:example.com",
+		InspectionUrl: "https://example.com/",
 		LanguageCode:  "en-US",
 	})
 	if err != nil {
 		t.Fatalf("InspectURL() error = %v", err)
 	}
 
-	if gotBody.SiteUrl != "sc-domain:futurelab.studio" || gotBody.InspectionUrl != "https://futurelab.studio/" {
+	if gotBody.SiteUrl != "sc-domain:example.com" || gotBody.InspectionUrl != "https://example.com/" {
 		t.Fatalf("request body = %#v", gotBody)
 	}
 	if result.Verdict != "PASS" || result.PageFetchState != "SUCCESSFUL" {

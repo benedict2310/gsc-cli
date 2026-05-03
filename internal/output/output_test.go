@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	cfg "github.com/bbleimschein/gsc-cli/internal/config"
-	gsc "github.com/bbleimschein/gsc-cli/internal/searchconsole"
+	cfg "github.com/benedict2310/gsc-cli/internal/config"
+	gsc "github.com/benedict2310/gsc-cli/internal/searchconsole"
 )
 
 func TestRenderSitesJSONIsDeterministic(t *testing.T) {
@@ -14,7 +14,7 @@ func TestRenderSitesJSONIsDeterministic(t *testing.T) {
 
 	var buf bytes.Buffer
 	err := RenderSites(&buf, cfg.OutputJSON, []gsc.Site{{
-		SiteURL:         "sc-domain:futurelab.studio",
+		SiteURL:         "sc-domain:example.com",
 		PermissionLevel: "siteOwner",
 	}})
 	if err != nil {
@@ -60,14 +60,14 @@ func TestRenderOverviewTableContainsSections(t *testing.T) {
 
 	var buf bytes.Buffer
 	err := RenderOverview(&buf, cfg.OutputTable, &gsc.OverviewReport{
-		Site:       "sc-domain:futurelab.studio",
+		Site:       "sc-domain:example.com",
 		StartDate:  "2026-03-01",
 		EndDate:    "2026-03-14",
-		InspectURL: "https://futurelab.studio/",
+		InspectURL: "https://example.com/",
 		TopPages: &gsc.AnalyticsResult{
 			Dimensions: []string{"PAGE"},
 			Rows: []gsc.AnalyticsRow{{
-				Keys:        []string{"https://futurelab.studio/"},
+				Keys:        []string{"https://example.com/"},
 				Clicks:      1,
 				Impressions: 10,
 				CTR:         0.1,
@@ -77,17 +77,17 @@ func TestRenderOverviewTableContainsSections(t *testing.T) {
 		TopQueries: &gsc.AnalyticsResult{
 			Dimensions: []string{"QUERY"},
 			Rows: []gsc.AnalyticsRow{{
-				Keys:        []string{"futurelab"},
+				Keys:        []string{"example"},
 				Clicks:      1,
 				Impressions: 4,
 				CTR:         0.25,
 				Position:    2,
 			}},
 		},
-		Sitemaps: []gsc.Sitemap{{Path: "https://futurelab.studio/sitemap.xml"}},
+		Sitemaps: []gsc.Sitemap{{Path: "https://example.com/sitemap.xml"}},
 		Inspection: &gsc.InspectionResult{
-			Site:          "sc-domain:futurelab.studio",
-			InspectionURL: "https://futurelab.studio/",
+			Site:          "sc-domain:example.com",
+			InspectionURL: "https://example.com/",
 			Verdict:       "PASS",
 		},
 	})

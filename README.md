@@ -43,7 +43,13 @@ go build ./...
 
 ## Install
 
-Build and install locally to the Homebrew prefix bin directory:
+Install directly from the module:
+
+```bash
+go install github.com/benedict2310/gsc-cli/cmd/gsc-cli@latest
+```
+
+Or build and install locally to the Homebrew prefix bin directory:
 
 ```bash
 go build -o ./gsc-cli ./cmd/gsc-cli
