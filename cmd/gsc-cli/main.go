@@ -45,6 +45,18 @@ func run(ctx context.Context, args []string) error {
 		return runDoctor(ctx, args[1:])
 	case "report":
 		return runReport(ctx, args[1:])
+	case "cache":
+		return runCache(ctx, args[1:])
+	case "sync":
+		return runSync(ctx, args[1:])
+	case "diagnose":
+		return runDiagnose(ctx, args[1:])
+	case "monitor":
+		return runMonitor(ctx, args[1:])
+	case "audit":
+		return runAudit(ctx, args[1:])
+	case "opportunities":
+		return runOpportunities(ctx, args[1:])
 	case "sitemaps":
 		return runSitemaps(ctx, args[1:])
 	case "inspect":
@@ -80,7 +92,12 @@ func runHelp(args []string) error {
 			return nil
 		}
 		return run(context.Background(), []string{"report", args[1], "--help"})
-	case "doctor", "version", "sites", "sitemaps", "inspect":
+	case "cache", "sync", "diagnose", "monitor", "audit", "sitemaps", "inspect":
+		if len(args) > 1 {
+			return run(context.Background(), []string{args[0], args[1], "--help"})
+		}
+		return run(context.Background(), []string{args[0], "--help"})
+	case "doctor", "version", "sites", "opportunities":
 		return run(context.Background(), append([]string{args[0]}, "--help"))
 	default:
 		return fmt.Errorf("unknown help topic %q", args[0])
@@ -558,73 +575,6 @@ func runVersion(args []string) error {
 	})
 }
 
-func runSitemaps(ctx context.Context, args []string) error {
-	if len(args) == 0 || args[0] != "list" {
-		return errors.New("usage: gsc-cli sitemaps list [flags]")
-	}
-
-	fs := flag.NewFlagSet("sitemaps list", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	base := bindCommonFlags(fs)
-	if err := fs.Parse(args[1:]); err != nil {
-		return err
-	}
-	if err := base.Resolve(true); err != nil {
-		return err
-	}
-
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
-	if err != nil {
-		return err
-	}
-
-	result, err := client.ListSitemaps(ctx, base.Site)
-	if err != nil {
-		return err
-	}
-	return output.RenderSitemaps(os.Stdout, base.Output, result)
-}
-
-func runInspect(ctx context.Context, args []string) error {
-	if len(args) == 0 || args[0] != "url" {
-		return errors.New("usage: gsc-cli inspect url [flags]")
-	}
-
-	fs := flag.NewFlagSet("inspect url", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	base := bindCommonFlags(fs)
-	var (
-		targetURL = fs.String("url", "", "URL to inspect")
-		language  = fs.String("language", "en-US", "response language, for example en-US")
-	)
-	if err := fs.Parse(args[1:]); err != nil {
-		return err
-	}
-	if err := base.Resolve(true); err != nil {
-		return err
-	}
-
-	req, err := cfg.BuildInspectRequest(cfg.InspectInput{
-		Site:         base.Site,
-		URL:          *targetURL,
-		LanguageCode: *language,
-	})
-	if err != nil {
-		return err
-	}
-
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
-	if err != nil {
-		return err
-	}
-
-	result, err := client.InspectURL(ctx, req)
-	if err != nil {
-		return err
-	}
-	return output.RenderInspection(os.Stdout, base.Output, result)
-}
-
 func credentialDetail(path string) string {
 	if strings.TrimSpace(path) == "" {
 		return ""
@@ -657,8 +607,16 @@ Usage:
   gsc-cli help <topic> <subcommand>
   gsc-cli report overview [flags]
   gsc-cli report compare [flags]
-  gsc-cli sitemaps list [flags]
-  gsc-cli inspect url [flags]
+  gsc-cli cache status [flags]
+  gsc-cli sync analytics [flags]
+  gsc-cli sync hourly [flags]
+  gsc-cli diagnose drop [flags]
+  gsc-cli monitor hourly [flags]
+  gsc-cli audit indexability [flags]
+  gsc-cli audit sitemap [flags]
+  gsc-cli opportunities [flags]
+  gsc-cli sitemaps list|get|submit|delete [flags]
+  gsc-cli inspect url|batch [flags]
   gsc-cli version [flags]
 
 Commands:
@@ -669,8 +627,16 @@ Commands:
   doctor                 Check credentials, property visibility, and site access
   report overview        One-shot operator snapshot: pages, queries, sitemap, inspection
   report compare         Compare current period vs previous equal period
-  sitemaps list          List sitemap status for a property
-  inspect url            Inspect one URL for indexing state
+  cache status           Show local cache/store status
+  sync analytics         Pull Search Analytics rows into the local cache
+  sync hourly            Pull provisional hourly Search Analytics rows into the cache
+  diagnose drop          Explain likely causes behind traffic drops
+  monitor hourly         Compare today's hourly performance with previous week
+  audit indexability     Inspect a batch of URLs and classify issues
+  audit sitemap          Compare a sitemap against Search Analytics pages
+  opportunities          Rank near-win and CTR-gap opportunities
+  sitemaps list|get|submit|delete  Manage sitemaps for a property
+  inspect url|batch      Inspect one or many URLs for indexing state
   version                Print build and version information
 
 Examples:
@@ -682,6 +648,12 @@ Examples:
   gsc-cli help analytics query
   gsc-cli report overview --credentials-file service-account.json --site sc-domain:example.com --days 28 --output table
   gsc-cli report compare --credentials-file service-account.json --site sc-domain:example.com --days 28 --dimension page --output table
+  gsc-cli cache status --cache-file .gsc-cli-cache.json
+  gsc-cli sync analytics --credentials-file service-account.json --site sc-domain:example.com --period last-28d --dimensions page,query
+  gsc-cli diagnose drop --credentials-file service-account.json --site sc-domain:example.com --current 2026-03-01:2026-03-14 --baseline previous-period
+  gsc-cli monitor hourly --credentials-file service-account.json --site sc-domain:example.com --output table
+  gsc-cli audit sitemap --credentials-file service-account.json --site sc-domain:example.com --sitemap-url https://example.com/sitemap.xml --period last-90d
+  gsc-cli opportunities --credentials-file service-account.json --site sc-domain:example.com --period last-90d --types near-win,ctr-gap
   gsc-cli sitemaps list --credentials-file service-account.json --site sc-domain:example.com
   gsc-cli inspect url --credentials-file service-account.json --site sc-domain:example.com --url https://example.com/
   gsc-cli version --output json

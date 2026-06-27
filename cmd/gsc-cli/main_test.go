@@ -68,6 +68,84 @@ func TestRunHelpAnalyticsQueryReturnsFlagErrHelp(t *testing.T) {
 	}
 }
 
+func TestRunHelpNewCommandGroupsReturnsNilOrFlagErrHelp(t *testing.T) {
+	t.Parallel()
+
+	cases := [][]string{
+		{"cache"},
+		{"sync"},
+		{"diagnose"},
+		{"monitor"},
+		{"audit"},
+		{"sitemaps"},
+		{"inspect"},
+	}
+	for _, args := range cases {
+		args := args
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			t.Parallel()
+			err := runHelp(args)
+			if err != nil && !errors.Is(err, flag.ErrHelp) {
+				t.Fatalf("runHelp(%v) = %v, want nil or flag.ErrHelp", args, err)
+			}
+		})
+	}
+}
+
+func TestRunNewCommandGroupDashHelpDoesNotRequireCredentials(t *testing.T) {
+	t.Parallel()
+
+	groups := []string{"cache", "sync", "diagnose", "monitor", "audit", "sitemaps", "inspect"}
+	for _, group := range groups {
+		group := group
+		t.Run(group, func(t *testing.T) {
+			t.Parallel()
+			err := run(context.Background(), []string{group, "--help"})
+			if err != nil && !errors.Is(err, flag.ErrHelp) {
+				t.Fatalf("run(%s --help) = %v, want nil or flag.ErrHelp", group, err)
+			}
+		})
+	}
+}
+
+func TestRunHelpNewGroupedSubcommandsReturnsFlagErrHelp(t *testing.T) {
+	t.Parallel()
+
+	cases := [][]string{
+		{"sync", "analytics"},
+		{"diagnose", "drop"},
+		{"monitor", "hourly"},
+		{"audit", "indexability"},
+		{"sitemaps", "get"},
+		{"inspect", "batch"},
+	}
+	for _, args := range cases {
+		args := args
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			t.Parallel()
+			if err := runHelp(args); !errors.Is(err, flag.ErrHelp) {
+				t.Fatalf("runHelp(%v) = %v, want flag.ErrHelp", args, err)
+			}
+		})
+	}
+}
+
+func TestRunCacheStatusDoesNotRequireCredentials(t *testing.T) {
+	tmpDir := t.TempDir()
+	cacheFile := filepath.Join(tmpDir, "cache.json")
+
+	out := captureStdout(t, func() {
+		err := run(context.Background(), []string{"cache", "status", "--cache-file", cacheFile, "--output", "json"})
+		if err != nil {
+			t.Fatalf("run() error = %v", err)
+		}
+	})
+
+	if !bytes.Contains(out, []byte(`"analyticsRows": 0`)) {
+		t.Fatalf("cache status output = %s", out)
+	}
+}
+
 func TestRunDoctorRedactsCredentialsPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	credentialsFile := filepath.Join(tmpDir, "service-account.json")
