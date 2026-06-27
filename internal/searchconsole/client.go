@@ -16,6 +16,7 @@ type Options struct {
 	CredentialsFile string
 	HTTPClient      *http.Client
 	Endpoint        string
+	WriteScope      bool
 }
 
 type Client struct {
@@ -27,8 +28,12 @@ func New(ctx context.Context, opts Options) (*Client, error) {
 		return nil, errors.New("credentials file is required")
 	}
 
+	scope := gscapi.WebmastersReadonlyScope
+	if opts.WriteScope {
+		scope = gscapi.WebmastersScope
+	}
 	clientOptions := []option.ClientOption{
-		option.WithScopes(gscapi.WebmastersReadonlyScope),
+		option.WithScopes(scope),
 	}
 	if opts.HTTPClient != nil {
 		clientOptions = append(clientOptions, option.WithHTTPClient(opts.HTTPClient))
@@ -97,16 +102,32 @@ func (c *Client) ListSitemaps(ctx context.Context, site string) ([]Sitemap, erro
 
 	result := make([]Sitemap, 0, len(resp.Sitemap))
 	for _, sitemap := range resp.Sitemap {
-		result = append(result, Sitemap{
-			Path:           sitemap.Path,
-			IsPending:      sitemap.IsPending,
-			LastSubmitted:  sitemap.LastSubmitted,
-			LastDownloaded: sitemap.LastDownloaded,
-			Warnings:       sitemap.Warnings,
-			Errors:         sitemap.Errors,
-		})
+		result = append(result, toSitemap(sitemap))
 	}
 	return result, nil
+}
+
+func (c *Client) GetSitemap(ctx context.Context, site, feedpath string) (*Sitemap, error) {
+	resp, err := c.service.Sitemaps.Get(site, feedpath).Context(ctx).Do()
+	if err != nil {
+		return nil, sanitizeError("get sitemap", err)
+	}
+	result := toSitemap(resp)
+	return &result, nil
+}
+
+func (c *Client) SubmitSitemap(ctx context.Context, site, feedpath string) error {
+	if err := c.service.Sitemaps.Submit(site, feedpath).Context(ctx).Do(); err != nil {
+		return sanitizeError("submit sitemap", err)
+	}
+	return nil
+}
+
+func (c *Client) DeleteSitemap(ctx context.Context, site, feedpath string) error {
+	if err := c.service.Sitemaps.Delete(site, feedpath).Context(ctx).Do(); err != nil {
+		return sanitizeError("delete sitemap", err)
+	}
+	return nil
 }
 
 func (c *Client) InspectURL(ctx context.Context, req *gscapi.InspectUrlIndexRequest) (*InspectionResult, error) {
@@ -137,6 +158,20 @@ func (c *Client) InspectURL(ctx context.Context, req *gscapi.InspectUrlIndexRequ
 	result.Sitemaps = append([]string(nil), index.Sitemap...)
 	result.InspectionResultLink = resp.InspectionResult.InspectionResultLink
 	return result, nil
+}
+
+func toSitemap(sitemap *gscapi.WmxSitemap) Sitemap {
+	if sitemap == nil {
+		return Sitemap{}
+	}
+	return Sitemap{
+		Path:           sitemap.Path,
+		IsPending:      sitemap.IsPending,
+		LastSubmitted:  sitemap.LastSubmitted,
+		LastDownloaded: sitemap.LastDownloaded,
+		Warnings:       sitemap.Warnings,
+		Errors:         sitemap.Errors,
+	}
 }
 
 func sanitizeError(action string, err error) error {

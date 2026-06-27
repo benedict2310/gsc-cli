@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestCommonResolveUsesEnvFallbacks(t *testing.T) {
@@ -185,6 +186,46 @@ func TestParseDayWindow(t *testing.T) {
 				t.Fatalf("ParseDayWindow() = %d, want %d", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestParsePeriodRange(t *testing.T) {
+	got, err := ParsePeriodRange("2026-03-01:2026-03-14")
+	if err != nil {
+		t.Fatalf("ParsePeriodRange() error = %v", err)
+	}
+	if got.Start != "2026-03-01" || got.End != "2026-03-14" {
+		t.Fatalf("ParsePeriodRange() = %#v", got)
+	}
+}
+
+func TestResolveBaseline(t *testing.T) {
+	current := DateRange{Start: "2026-03-01", End: "2026-03-14"}
+
+	previous, err := ResolveBaseline(current, "previous-period")
+	if err != nil {
+		t.Fatalf("ResolveBaseline(previous-period) error = %v", err)
+	}
+	if previous.Start != "2026-02-15" || previous.End != "2026-02-28" {
+		t.Fatalf("previous = %#v", previous)
+	}
+
+	yoy, err := ResolveBaseline(current, "same-period-last-year")
+	if err != nil {
+		t.Fatalf("ResolveBaseline(same-period-last-year) error = %v", err)
+	}
+	if yoy.Start != "2025-03-01" || yoy.End != "2025-03-14" {
+		t.Fatalf("yoy = %#v", yoy)
+	}
+}
+
+func TestResolveNamedPeriodLastDays(t *testing.T) {
+	got, err := ResolveNamedPeriod("last-7d", time.Date(2026, 3, 15, 12, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("ResolveNamedPeriod() error = %v", err)
+	}
+	if got.Start != "2026-03-08" || got.End != "2026-03-14" {
+		t.Fatalf("ResolveNamedPeriod() = %#v", got)
 	}
 }
 

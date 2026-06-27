@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -231,6 +233,57 @@ func ParseDayWindow(value string) (int, error) {
 		return 90, nil
 	default:
 		return 0, errors.New("days must be one of 7, 28, or 90")
+	}
+}
+
+func ParsePeriodRange(value string) (DateRange, error) {
+	parts := strings.Split(strings.TrimSpace(value), ":")
+	if len(parts) != 2 {
+		return DateRange{}, errors.New("period must be in YYYY-MM-DD:YYYY-MM-DD format")
+	}
+	return ResolveDateRange(parts[0], parts[1])
+}
+
+func ResolveBaseline(current DateRange, baseline string) (DateRange, error) {
+	switch strings.ToLower(strings.TrimSpace(baseline)) {
+	case "", "previous-period":
+		return PreviousDateRange(current)
+	case "same-period-last-year":
+		start, err := time.Parse("2006-01-02", current.Start)
+		if err != nil {
+			return DateRange{}, fmt.Errorf("parse current start date: %w", err)
+		}
+		end, err := time.Parse("2006-01-02", current.End)
+		if err != nil {
+			return DateRange{}, fmt.Errorf("parse current end date: %w", err)
+		}
+		return DateRange{Start: start.AddDate(-1, 0, 0).Format("2006-01-02"), End: end.AddDate(-1, 0, 0).Format("2006-01-02")}, nil
+	default:
+		return ParsePeriodRange(baseline)
+	}
+}
+
+var namedPeriodPattern = regexp.MustCompile(`^last-(\d+)([dm])$`)
+
+func ResolveNamedPeriod(value string, now time.Time) (DateRange, error) {
+	matches := namedPeriodPattern.FindStringSubmatch(strings.ToLower(strings.TrimSpace(value)))
+	if len(matches) != 3 {
+		return DateRange{}, errors.New("period must look like last-7d or last-16m")
+	}
+	count, err := strconv.Atoi(matches[1])
+	if err != nil || count < 1 {
+		return DateRange{}, errors.New("period count must be positive")
+	}
+	end := now.AddDate(0, 0, -1)
+	switch matches[2] {
+	case "d":
+		start := end.AddDate(0, 0, -(count - 1))
+		return DateRange{Start: start.Format("2006-01-02"), End: end.Format("2006-01-02")}, nil
+	case "m":
+		start := end.AddDate(0, -(count - 1), 0)
+		return DateRange{Start: start.Format("2006-01-02"), End: end.Format("2006-01-02")}, nil
+	default:
+		return DateRange{}, errors.New("unsupported period unit")
 	}
 }
 

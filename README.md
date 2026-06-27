@@ -1,12 +1,13 @@
 # gsc-cli
 
-`gsc-cli` is a small, read-only Go CLI for Google Search Console.
+`gsc-cli` is a small Go CLI for Google Search Console diagnostics and SEO intelligence.
 
 It is intentionally narrow:
 - service-account only
 - no browser OAuth
 - no token persistence
-- no write operations
+- read-only by default
+- sitemap submit/delete are the only write-capable operations and request write scope only for those commands
 - no MCP server in v1
 
 ## Commands
@@ -18,8 +19,16 @@ It is intentionally narrow:
 - `gsc-cli help <topic>`
 - `gsc-cli report overview`
 - `gsc-cli report compare`
-- `gsc-cli sitemaps list`
-- `gsc-cli inspect url`
+- `gsc-cli cache status`
+- `gsc-cli sync analytics`
+- `gsc-cli sync hourly`
+- `gsc-cli diagnose drop`
+- `gsc-cli monitor hourly`
+- `gsc-cli audit indexability`
+- `gsc-cli audit sitemap`
+- `gsc-cli opportunities`
+- `gsc-cli sitemaps list|get|submit|delete`
+- `gsc-cli inspect url|batch`
 
 ## Setup
 
@@ -131,6 +140,60 @@ gsc-cli help analytics query
 ```
 
 ```bash
+gsc-cli cache status --cache-file .gsc-cli-cache.json --output table
+```
+
+```bash
+gsc-cli sync analytics \
+  --credentials-file ./service-account.json \
+  --site sc-domain:example.com \
+  --period last-28d \
+  --dimensions page,query
+```
+
+```bash
+gsc-cli sync hourly \
+  --credentials-file ./service-account.json \
+  --site sc-domain:example.com \
+  --last 10
+```
+
+```bash
+gsc-cli diagnose drop \
+  --credentials-file ./service-account.json \
+  --site sc-domain:example.com \
+  --current 2026-06-01:2026-06-14 \
+  --baseline previous-period \
+  --segments page,query,device \
+  --output table
+```
+
+```bash
+gsc-cli monitor hourly \
+  --credentials-file ./service-account.json \
+  --site sc-domain:example.com \
+  --output table
+```
+
+```bash
+gsc-cli audit sitemap \
+  --credentials-file ./service-account.json \
+  --site sc-domain:example.com \
+  --sitemap-url https://example.com/sitemap.xml \
+  --period last-90d \
+  --output table
+```
+
+```bash
+gsc-cli opportunities \
+  --credentials-file ./service-account.json \
+  --site sc-domain:example.com \
+  --period last-90d \
+  --types near-win,ctr-gap,decay \
+  --output table
+```
+
+```bash
 gsc-cli sitemaps list \
   --credentials-file ./service-account.json \
   --site sc-domain:example.com
@@ -141,6 +204,15 @@ gsc-cli inspect url \
   --credentials-file ./service-account.json \
   --site sc-domain:example.com \
   --url https://example.com/
+```
+
+```bash
+gsc-cli inspect batch \
+  --credentials-file ./service-account.json \
+  --site sc-domain:example.com \
+  --urls-file urls.txt \
+  --max-urls 100 \
+  --output table
 ```
 
 ```bash
