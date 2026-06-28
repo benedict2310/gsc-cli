@@ -131,6 +131,9 @@ func BuildAnalyticsRequest(input AnalyticsInput) (*gscapi.SearchAnalyticsQueryRe
 	if err != nil {
 		return nil, err
 	}
+	if contains(dimensions, "HOUR") && len(dimensions) > 1 {
+		return nil, errors.New(`dimension "HOUR" cannot be combined with other dimensions`)
+	}
 	if contains(dimensions, "HOUR") && dataState != "HOURLY_ALL" {
 		return nil, errors.New(`dimension "HOUR" requires data-state "hourly_all"`)
 	}

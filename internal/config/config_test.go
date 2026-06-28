@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -64,6 +65,23 @@ func TestBuildAnalyticsRequestRejectsUnsupportedDimension(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("BuildAnalyticsRequest() expected unsupported dimension error")
+	}
+}
+
+func TestBuildAnalyticsRequestRejectsHourCombinedWithOtherDimensions(t *testing.T) {
+	_, err := BuildAnalyticsRequest(AnalyticsInput{
+		StartDate:  "2026-03-01",
+		EndDate:    "2026-03-01",
+		Dimensions: "date,hour",
+		SearchType: "web",
+		DataState:  "hourly_all",
+		Limit:      10,
+	})
+	if err == nil {
+		t.Fatal("BuildAnalyticsRequest() expected combined hour dimension error")
+	}
+	if !strings.Contains(err.Error(), `dimension "HOUR" cannot be combined`) {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

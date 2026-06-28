@@ -150,7 +150,7 @@ func runSyncHourly(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	req, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{StartDate: rangeValue.Start, EndDate: rangeValue.End, Dimensions: "date,hour", SearchType: "web", DataState: "hourly_all", Limit: 25000})
+	req, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{StartDate: rangeValue.Start, EndDate: rangeValue.End, Dimensions: "hour", SearchType: "web", DataState: "hourly_all", Limit: 25000})
 	if err != nil {
 		return err
 	}
