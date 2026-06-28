@@ -10,6 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	cfg "github.com/benedict2310/gsc-cli/internal/config"
+	gsc "github.com/benedict2310/gsc-cli/internal/searchconsole"
 )
 
 func TestRunAnalyticsQueryParsesFirstFlag(t *testing.T) {
@@ -143,6 +146,50 @@ func TestRunCacheStatusDoesNotRequireCredentials(t *testing.T) {
 
 	if !bytes.Contains(out, []byte(`"analyticsRows": 0`)) {
 		t.Fatalf("cache status output = %s", out)
+	}
+}
+
+func TestBuildCompareReportUsesAggregateRowsForSummary(t *testing.T) {
+	t.Parallel()
+
+	currentDetail := &gsc.AnalyticsResult{
+		Rows: []gsc.AnalyticsRow{{Keys: []string{"/a"}, Clicks: 2, Impressions: 20}, {Keys: []string{"/b"}, Clicks: 3, Impressions: 30}},
+	}
+	previousDetail := &gsc.AnalyticsResult{
+		Rows: []gsc.AnalyticsRow{{Keys: []string{"/a"}, Clicks: 1, Impressions: 10}},
+	}
+	currentAggregate := &gsc.AnalyticsResult{
+		Rows: []gsc.AnalyticsRow{{Keys: []string{"2026-03-01"}, Clicks: 10, Impressions: 100}, {Keys: []string{"2026-03-02"}, Clicks: 5, Impressions: 50}},
+	}
+	previousAggregate := &gsc.AnalyticsResult{
+		Rows: []gsc.AnalyticsRow{{Keys: []string{"2026-02-27"}, Clicks: 4, Impressions: 40}, {Keys: []string{"2026-02-28"}, Clicks: 2, Impressions: 20}},
+	}
+
+	report := buildCompareReport(
+		"sc-domain:example.com",
+		"page",
+		cfg.DateRange{Start: "2026-03-01", End: "2026-03-02"},
+		cfg.DateRange{Start: "2026-02-27", End: "2026-02-28"},
+		currentDetail,
+		previousDetail,
+		currentAggregate,
+		previousAggregate,
+	)
+
+	if report.Summary.CurrentRows != len(currentDetail.Rows) || report.Summary.PreviousRows != len(previousDetail.Rows) {
+		t.Fatalf("summary rows = %#v", report.Summary)
+	}
+	if report.Summary.CurrentClicks != 15 || report.Summary.CurrentImpressions != 150 {
+		t.Fatalf("current summary = %#v", report.Summary)
+	}
+	if report.Summary.PreviousClicks != 6 || report.Summary.PreviousImpressions != 60 {
+		t.Fatalf("previous summary = %#v", report.Summary)
+	}
+	if report.Summary.ClickDelta != 9 || report.Summary.ImpressionDelta != 90 {
+		t.Fatalf("delta summary = %#v", report.Summary)
+	}
+	if report.Current != currentDetail || report.Previous != previousDetail {
+		t.Fatalf("detail rows changed: %#v", report)
 	}
 }
 

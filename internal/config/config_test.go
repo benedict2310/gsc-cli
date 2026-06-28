@@ -99,6 +99,32 @@ func TestBuildAnalyticsRequestRequiresHourlyAllForHour(t *testing.T) {
 	}
 }
 
+func TestBuildAnalyticsRequestNormalizesSearchAppearanceAliases(t *testing.T) {
+	t.Parallel()
+
+	for _, dimensions := range []string{"searchAppearance", "search_appearance", "search-appearance"} {
+		dimensions := dimensions
+		t.Run(dimensions, func(t *testing.T) {
+			t.Parallel()
+
+			req, err := BuildAnalyticsRequest(AnalyticsInput{
+				StartDate:  "2026-03-01",
+				EndDate:    "2026-03-02",
+				Dimensions: dimensions,
+				SearchType: "web",
+				DataState:  "final",
+				Limit:      25,
+			})
+			if err != nil {
+				t.Fatalf("BuildAnalyticsRequest() error = %v", err)
+			}
+			if len(req.Dimensions) != 1 || req.Dimensions[0] != "SEARCH_APPEARANCE" {
+				t.Fatalf("Dimensions = %#v", req.Dimensions)
+			}
+		})
+	}
+}
+
 func TestBuildAnalyticsRequestNormalizesValues(t *testing.T) {
 	req, err := BuildAnalyticsRequest(AnalyticsInput{
 		StartDate:  "2026-03-01",

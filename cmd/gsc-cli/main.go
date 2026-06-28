@@ -452,18 +452,55 @@ func runReportCompare(ctx context.Context, args []string) error {
 		return err
 	}
 
-	currentImpressions, currentClicks := sumAnalyticsRows(currentResult.Rows)
-	previousImpressions, previousClicks := sumAnalyticsRows(previousResult.Rows)
-	report := gsc.CompareReport{
-		Site:      base.Site,
-		Dimension: strings.ToUpper(dim),
+	currentAggregateReq, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{
+		StartDate:  currentRange.Start,
+		EndDate:    currentRange.End,
+		Dimensions: "date",
+		SearchType: *searchType,
+		DataState:  *dataState,
+		Limit:      25000,
+	})
+	if err != nil {
+		return err
+	}
+	previousAggregateReq, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{
+		StartDate:  previousRange.Start,
+		EndDate:    previousRange.End,
+		Dimensions: "date",
+		SearchType: *searchType,
+		DataState:  *dataState,
+		Limit:      25000,
+	})
+	if err != nil {
+		return err
+	}
+	currentAggregate, err := client.QueryAnalytics(ctx, base.Site, currentAggregateReq)
+	if err != nil {
+		return err
+	}
+	previousAggregate, err := client.QueryAnalytics(ctx, base.Site, previousAggregateReq)
+	if err != nil {
+		return err
+	}
+
+	report := buildCompareReport(base.Site, dim, currentRange, previousRange, currentResult, previousResult, currentAggregate, previousAggregate)
+	return renderCompare(base.Output, report)
+}
+
+func buildCompareReport(site, dimension string, currentRange, previousRange cfg.DateRange, currentDetail, previousDetail, currentAggregate, previousAggregate *gsc.AnalyticsResult) gsc.CompareReport {
+	currentImpressions, currentClicks := sumAnalyticsRows(currentAggregate.Rows)
+	previousImpressions, previousClicks := sumAnalyticsRows(previousAggregate.Rows)
+
+	return gsc.CompareReport{
+		Site:      site,
+		Dimension: strings.ToUpper(dimension),
 		Summary: gsc.CompareSummary{
 			CurrentStart:        currentRange.Start,
 			CurrentEnd:          currentRange.End,
 			PreviousStart:       previousRange.Start,
 			PreviousEnd:         previousRange.End,
-			CurrentRows:         len(currentResult.Rows),
-			PreviousRows:        len(previousResult.Rows),
+			CurrentRows:         len(currentDetail.Rows),
+			PreviousRows:        len(previousDetail.Rows),
 			CurrentImpressions:  currentImpressions,
 			PreviousImpressions: previousImpressions,
 			CurrentClicks:       currentClicks,
@@ -471,10 +508,9 @@ func runReportCompare(ctx context.Context, args []string) error {
 			ImpressionDelta:     currentImpressions - previousImpressions,
 			ClickDelta:          currentClicks - previousClicks,
 		},
-		Current:  currentResult,
-		Previous: previousResult,
+		Current:  currentDetail,
+		Previous: previousDetail,
 	}
-	return renderCompare(base.Output, report)
 }
 
 func runDoctor(ctx context.Context, args []string) error {
