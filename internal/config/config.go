@@ -338,7 +338,7 @@ func parseDimensions(value string) ([]string, error) {
 	normalized := make([]string, 0, len(parts))
 	seen := make(map[string]struct{}, len(parts))
 	for _, part := range parts {
-		dimension := strings.ToUpper(strings.TrimSpace(part))
+		dimension := normalizeDimension(part)
 		if dimension == "" {
 			continue
 		}
@@ -355,6 +355,16 @@ func parseDimensions(value string) ([]string, error) {
 		return nil, errors.New("at least one dimension is required")
 	}
 	return normalized, nil
+}
+
+func normalizeDimension(value string) string {
+	normalized := strings.TrimSpace(value)
+	switch strings.ToLower(normalized) {
+	case "searchappearance", "search_appearance", "search-appearance":
+		return "SEARCH_APPEARANCE"
+	default:
+		return strings.ToUpper(normalized)
+	}
 }
 
 func normalizeSearchType(value string) (string, error) {
