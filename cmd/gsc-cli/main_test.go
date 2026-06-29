@@ -15,6 +15,134 @@ import (
 	gsc "github.com/benedict2310/gsc-cli/internal/searchconsole"
 )
 
+func TestRunCommandsJSONIncludesPublicCommandsWithoutCredentials(t *testing.T) {
+	out := captureStdout(t, func() {
+		if err := run(context.Background(), []string{"commands", "--output", "json"}); err != nil {
+			t.Fatalf("run() error = %v", err)
+		}
+	})
+
+	var payload struct {
+		Commands []struct {
+			Path               string `json:"path"`
+			Safety             string `json:"safety"`
+			WriteScopeRequired bool   `json:"writeScopeRequired"`
+		} `json:"commands"`
+	}
+	if err := json.Unmarshal(out, &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if len(payload.Commands) == 0 {
+		t.Fatal("commands payload was empty")
+	}
+	foundSubmit := false
+	for _, command := range payload.Commands {
+		if command.Path == "sitemaps submit" {
+			foundSubmit = true
+			if command.Safety != "write-capable" || !command.WriteScopeRequired {
+				t.Fatalf("submit markers = %#v", command)
+			}
+		}
+	}
+	if !foundSubmit {
+		t.Fatal("commands payload missing sitemaps submit")
+	}
+}
+
+func TestRunCommandDiagnoseDropJSON(t *testing.T) {
+	out := captureStdout(t, func() {
+		if err := run(context.Background(), []string{"command", "diagnose", "drop", "--output", "json"}); err != nil {
+			t.Fatalf("run() error = %v", err)
+		}
+	})
+
+	var payload struct {
+		Path                string `json:"path"`
+		RequiresSite        bool   `json:"requiresSite"`
+		RequiresCredentials bool   `json:"requiresCredentials"`
+		Safety              string `json:"safety"`
+	}
+	if err := json.Unmarshal(out, &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.Path != "diagnose drop" {
+		t.Fatalf("path = %q", payload.Path)
+	}
+	if !payload.RequiresSite || !payload.RequiresCredentials {
+		t.Fatalf("requirements = %#v", payload)
+	}
+	if payload.Safety != "read-only" {
+		t.Fatalf("safety = %q", payload.Safety)
+	}
+}
+
+func TestRunCommandsTableIncludesAgentDiscoveryFields(t *testing.T) {
+	out := captureStdout(t, func() {
+		if err := run(context.Background(), []string{"commands", "--output", "table"}); err != nil {
+			t.Fatalf("run() error = %v", err)
+		}
+	})
+	for _, want := range []string{"REQUIRES_CREDENTIALS", "REQUIRES_SITE", "APIS_USED", "OUTPUT_MODES", "FLAGS"} {
+		if !bytes.Contains(out, []byte(want)) {
+			t.Fatalf("commands table missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestRunCommandTableIncludesFlagsExamplesAndRelatedCommands(t *testing.T) {
+	out := captureStdout(t, func() {
+		if err := run(context.Background(), []string{"command", "diagnose", "drop", "--output", "table"}); err != nil {
+			t.Fatalf("run() error = %v", err)
+		}
+	})
+	for _, want := range []string{"FLAGS", "current:string:required", "EXAMPLES", "CAVEATS", "RELATED_COMMANDS"} {
+		if !bytes.Contains(out, []byte(want)) {
+			t.Fatalf("command table missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestRunCommandHelpPrintsUsage(t *testing.T) {
+	out := captureStderr(t, func() {
+		if err := run(context.Background(), []string{"command", "--help"}); !errors.Is(err, flag.ErrHelp) {
+			t.Fatalf("run() = %v, want flag.ErrHelp", err)
+		}
+	})
+	if !bytes.Contains(out, []byte("gsc-cli command <command-path>")) {
+		t.Fatalf("help output = %s", out)
+	}
+}
+
+func TestRunCommandHelpCommandPathJSON(t *testing.T) {
+	out := captureStdout(t, func() {
+		if err := run(context.Background(), []string{"command", "help", "--output", "json"}); err != nil {
+			t.Fatalf("run() error = %v", err)
+		}
+	})
+
+	var payload struct {
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(out, &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v; output=%s", err, out)
+	}
+	if payload.Path != "help" {
+		t.Fatalf("path = %q, want help", payload.Path)
+	}
+}
+
+func TestRunCommandNotFound(t *testing.T) {
+	t.Parallel()
+
+	err := run(context.Background(), []string{"command", "nope", "--output", "json"})
+	if err == nil {
+		t.Fatal("run() expected error")
+	}
+	if !strings.Contains(err.Error(), `unknown command spec "nope"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestRunAnalyticsQueryParsesFirstFlag(t *testing.T) {
 	t.Parallel()
 
@@ -239,6 +367,33 @@ func captureStdout(t *testing.T, fn func()) []byte {
 		t.Fatalf("writer.Close() error = %v", err)
 	}
 	os.Stdout = originalStdout
+
+	var buf bytes.Buffer
+	if _, err := buf.ReadFrom(reader); err != nil {
+		t.Fatalf("buf.ReadFrom() error = %v", err)
+	}
+	if err := reader.Close(); err != nil {
+		t.Fatalf("reader.Close() error = %v", err)
+	}
+	return buf.Bytes()
+}
+
+func captureStderr(t *testing.T, fn func()) []byte {
+	t.Helper()
+
+	originalStderr := os.Stderr
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() error = %v", err)
+	}
+	os.Stderr = writer
+
+	fn()
+
+	if err := writer.Close(); err != nil {
+		t.Fatalf("writer.Close() error = %v", err)
+	}
+	os.Stderr = originalStderr
 
 	var buf bytes.Buffer
 	if _, err := buf.ReadFrom(reader); err != nil {

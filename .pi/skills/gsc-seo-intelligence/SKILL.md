@@ -30,6 +30,13 @@ Do **not** use this for generic web analytics without Search Console access. Do 
 gsc-cli version --output table
 ```
 
+For agent/tool discovery, prefer the machine-readable manifest over scraping help text:
+
+```bash
+gsc-cli commands --output json
+gsc-cli command diagnose drop --output json
+```
+
 The CLI uses a Google service-account JSON file, not browser OAuth. If auth fails, likely causes are:
 
 - service-account key deleted/disabled
@@ -49,9 +56,11 @@ Never print or commit service-account JSON contents.
 
 ## Initial Health Check
 
-Start every unfamiliar property with:
+Start every unfamiliar property by checking the command manifest and auth/property health:
 
 ```bash
+gsc-cli commands --output json
+
 gsc-cli doctor --output table
 
 gsc-cli sites list --output table
