@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/benedict2310/gsc-cli/internal/commandspec"
 	cfg "github.com/benedict2310/gsc-cli/internal/config"
 	"github.com/benedict2310/gsc-cli/internal/output"
 	gsc "github.com/benedict2310/gsc-cli/internal/searchconsole"
@@ -63,6 +64,10 @@ func run(ctx context.Context, args []string) error {
 		return runInspect(ctx, args[1:])
 	case "version":
 		return runVersion(args[1:])
+	case "commands":
+		return runCommands(args[1:])
+	case "command":
+		return runCommand(args[1:])
 	case "help":
 		return runHelp(args[1:])
 	case "-h", "--help":
@@ -72,6 +77,81 @@ func run(ctx context.Context, args []string) error {
 		printUsage()
 		return fmt.Errorf("unknown command %q", args[0])
 	}
+}
+
+func runCommands(args []string) error {
+	fs := flag.NewFlagSet("commands", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	outputMode := fs.String("output", cfg.OutputJSON, "output mode: json or table")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	mode, err := normalizeOutputMode(*outputMode)
+	if err != nil {
+		return err
+	}
+	return renderCommandManifest(mode, commandspec.PublicManifest())
+}
+
+func runCommand(args []string) error {
+	pathParts, outputMode, err := parseCommandSpecArgs(args)
+	if err != nil {
+		return err
+	}
+	mode, err := normalizeOutputMode(outputMode)
+	if err != nil {
+		return err
+	}
+	path := strings.Join(pathParts, " ")
+	command, ok := commandspec.Find(path)
+	if !ok {
+		return fmt.Errorf("unknown command spec %q", path)
+	}
+	return renderCommandSpec(mode, command)
+}
+
+func parseCommandSpecArgs(args []string) ([]string, string, error) {
+	outputMode := cfg.OutputJSON
+	var pathParts []string
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--output" || arg == "-output":
+			if i+1 >= len(args) {
+				return nil, "", errors.New("output requires a value")
+			}
+			outputMode = args[i+1]
+			i++
+		case strings.HasPrefix(arg, "--output="):
+			outputMode = strings.TrimPrefix(arg, "--output=")
+		case arg == "--help" || arg == "-h":
+			printCommandSpecUsage()
+			return nil, "", flag.ErrHelp
+		case strings.HasPrefix(arg, "-"):
+			return nil, "", fmt.Errorf("unsupported command flag %q", arg)
+		default:
+			pathParts = append(pathParts, arg)
+		}
+	}
+	if len(pathParts) == 0 {
+		return nil, "", errors.New("usage: gsc-cli command <command-path> [--output json|table]")
+	}
+	return pathParts, outputMode, nil
+}
+
+func printCommandSpecUsage() {
+	fmt.Fprintln(os.Stderr, "Usage: gsc-cli command <command-path> [--output json|table]")
+	fmt.Fprintln(os.Stderr, "Examples:")
+	fmt.Fprintln(os.Stderr, "  gsc-cli command diagnose drop --output json")
+	fmt.Fprintln(os.Stderr, "  gsc-cli command audit sitemap --output table")
+}
+
+func normalizeOutputMode(mode string) (string, error) {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	if mode != cfg.OutputJSON && mode != cfg.OutputTable {
+		return "", fmt.Errorf("unsupported output mode %q; supported values are json and table", mode)
+	}
+	return mode, nil
 }
 
 func runHelp(args []string) error {
@@ -97,7 +177,7 @@ func runHelp(args []string) error {
 			return run(context.Background(), []string{args[0], args[1], "--help"})
 		}
 		return run(context.Background(), []string{args[0], "--help"})
-	case "doctor", "version", "sites", "opportunities":
+	case "doctor", "version", "sites", "opportunities", "commands", "command":
 		return run(context.Background(), append([]string{args[0]}, "--help"))
 	default:
 		return fmt.Errorf("unknown help topic %q", args[0])
@@ -628,7 +708,7 @@ func bindCommonFlags(fs *flag.FlagSet) *cfg.Common {
 
 func printUsage() {
 	fmt.Fprint(os.Stderr, strings.TrimSpace(fmt.Sprintf(`
-gsc-cli - read-only Google Search Console CLI
+gsc-cli - Google Search Console diagnostics and SEO intelligence CLI
 
 Start here:
   gsc-cli report overview --site sc-domain:example.com --credentials-file ./service-account.json --output table
@@ -654,6 +734,8 @@ Usage:
   gsc-cli sitemaps list|get|submit|delete [flags]
   gsc-cli inspect url|batch [flags]
   gsc-cli version [flags]
+  gsc-cli commands [flags]
+  gsc-cli command <command-path> [flags]
 
 Commands:
   sites list             List visible Search Console properties
@@ -674,6 +756,8 @@ Commands:
   sitemaps list|get|submit|delete  Manage sitemaps for a property
   inspect url|batch      Inspect one or many URLs for indexing state
   version                Print build and version information
+  commands               List machine-readable command metadata
+  command                Show metadata for one command path
 
 Examples:
   gsc-cli sites list --credentials-file service-account.json
@@ -693,6 +777,8 @@ Examples:
   gsc-cli sitemaps list --credentials-file service-account.json --site sc-domain:example.com
   gsc-cli inspect url --credentials-file service-account.json --site sc-domain:example.com --url https://example.com/
   gsc-cli version --output json
+  gsc-cli commands --output json
+  gsc-cli command diagnose drop --output json
 `, time.Now().AddDate(0, 0, -7).Format("2006-01-02"), time.Now().Format("2006-01-02"))))
 	fmt.Fprintln(os.Stderr)
 }

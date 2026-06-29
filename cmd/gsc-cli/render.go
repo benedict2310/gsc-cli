@@ -8,6 +8,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/benedict2310/gsc-cli/internal/commandspec"
 	cfg "github.com/benedict2310/gsc-cli/internal/config"
 	gsc "github.com/benedict2310/gsc-cli/internal/searchconsole"
 )
@@ -40,6 +41,69 @@ func renderVersion(mode string, info versionInfo) error {
 	fmt.Fprintf(tw, "COMMIT\t%s\n", info.Commit)
 	fmt.Fprintf(tw, "DATE\t%s\n", info.Date)
 	return tw.Flush()
+}
+
+func renderCommandManifest(mode string, manifest commandspec.Manifest) error {
+	if mode == cfg.OutputJSON {
+		return writeJSON(os.Stdout, manifest)
+	}
+	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "PATH\tSUMMARY\tREQUIRES_CREDENTIALS\tREQUIRES_SITE\tAPIS_USED\tOUTPUT_MODES\tSAFETY\tWRITE_SCOPE\tFLAGS")
+	for _, command := range manifest.Commands {
+		fmt.Fprintf(tw, "%s\t%s\t%t\t%t\t%s\t%s\t%s\t%t\t%s\n", command.Path, command.Summary, command.RequiresCredentials, command.RequiresSite, strings.Join(command.APIsUsed, ","), strings.Join(command.OutputModes, ","), command.Safety, command.WriteScopeRequired, flagNames(command.Flags))
+	}
+	return tw.Flush()
+}
+
+func renderCommandSpec(mode string, command commandspec.Command) error {
+	if mode == cfg.OutputJSON {
+		return writeJSON(os.Stdout, command)
+	}
+	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "FIELD\tVALUE")
+	fmt.Fprintf(tw, "PATH\t%s\n", command.Path)
+	fmt.Fprintf(tw, "SUMMARY\t%s\n", command.Summary)
+	fmt.Fprintf(tw, "DESCRIPTION\t%s\n", command.Description)
+	fmt.Fprintf(tw, "REQUIRES_CREDENTIALS\t%t\n", command.RequiresCredentials)
+	fmt.Fprintf(tw, "REQUIRES_SITE\t%t\n", command.RequiresSite)
+	fmt.Fprintf(tw, "APIS_USED\t%s\n", strings.Join(command.APIsUsed, ","))
+	fmt.Fprintf(tw, "SAFETY\t%s\n", command.Safety)
+	fmt.Fprintf(tw, "WRITE_SCOPE_REQUIRED\t%t\n", command.WriteScopeRequired)
+	fmt.Fprintf(tw, "OUTPUT_MODES\t%s\n", strings.Join(command.OutputModes, ","))
+	fmt.Fprintf(tw, "FLAGS\t%s\n", flagSummaries(command.Flags))
+	fmt.Fprintf(tw, "EXAMPLES\t%s\n", strings.Join(command.Examples, " | "))
+	fmt.Fprintf(tw, "CAVEATS\t%s\n", strings.Join(command.Caveats, " | "))
+	fmt.Fprintf(tw, "RELATED_COMMANDS\t%s\n", strings.Join(command.RelatedCommands, ","))
+	return tw.Flush()
+}
+
+func flagNames(flags []commandspec.Flag) string {
+	names := make([]string, 0, len(flags))
+	for _, flag := range flags {
+		names = append(names, flag.Name)
+	}
+	return strings.Join(names, ",")
+}
+
+func flagSummaries(flags []commandspec.Flag) string {
+	parts := make([]string, 0, len(flags))
+	for _, flag := range flags {
+		part := flag.Name + ":" + flag.Type
+		if flag.Required {
+			part += ":required"
+		}
+		if flag.Default != "" {
+			part += ":default=" + flag.Default
+		}
+		if flag.EnvFallback != "" {
+			part += ":env=" + flag.EnvFallback
+		}
+		if len(flag.AllowedValues) > 0 {
+			part += ":allowed=" + strings.Join(flag.AllowedValues, "/")
+		}
+		parts = append(parts, part)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func renderDoctor(mode string, report doctorReport) error {

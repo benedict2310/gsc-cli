@@ -29,6 +29,25 @@ It is intentionally narrow:
 - `gsc-cli opportunities`
 - `gsc-cli sitemaps list|get|submit|delete`
 - `gsc-cli inspect url|batch`
+- `gsc-cli commands`
+- `gsc-cli command <command-path>`
+
+## Agent Discovery
+
+Agents and automation should start with the machine-readable command manifest instead of scraping help text:
+
+```bash
+gsc-cli commands --output json
+```
+
+Inspect one command by path:
+
+```bash
+gsc-cli command diagnose drop --output json
+gsc-cli command audit sitemap --output json
+```
+
+The manifest includes flags, examples, required credentials/site, Search Console API families, output modes, safety markers, and whether write scope is required. Only `sitemaps submit` and `sitemaps delete` are write-capable.
 
 ## Setup
 
@@ -70,6 +89,7 @@ Verify:
 ```bash
 command -v gsc-cli
 gsc-cli --help
+gsc-cli commands --output json
 ```
 
 ## Start Here
@@ -137,6 +157,14 @@ gsc-cli report compare \
 
 ```bash
 gsc-cli help analytics query
+```
+
+```bash
+gsc-cli commands --output json
+```
+
+```bash
+gsc-cli command opportunities --output json
 ```
 
 ```bash
