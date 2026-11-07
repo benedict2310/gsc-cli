@@ -4,6 +4,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"time"
 
 	gsc "github.com/benedict2310/gsc-cli/internal/searchconsole"
 )
@@ -73,8 +74,8 @@ type HourlyComparison struct {
 }
 
 func BuildHourlyComparison(current, baseline *gsc.AnalyticsResult) HourlyComparison {
-	currentMap := analyticsByKey(current)
-	baselineMap := analyticsByKey(baseline)
+	currentMap := analyticsByLocalHour(current)
+	baselineMap := analyticsByLocalHour(baseline)
 	allKeys := make(map[string]struct{})
 	for key := range currentMap {
 		allKeys[key] = struct{}{}
@@ -226,6 +227,23 @@ func AuditSitemap(sitemapURLs []string, analytics *gsc.AnalyticsResult) SitemapA
 	sort.Strings(report.WithoutImpressions)
 	sort.Strings(report.MissingFromSitemap)
 	return report
+}
+
+// analyticsByLocalHour keys rows by clock hour ("15:04"), because HOUR keys are full
+// timestamps and the compared days differ.
+func analyticsByLocalHour(result *gsc.AnalyticsResult) map[string]gsc.AnalyticsRow {
+	rows := make(map[string]gsc.AnalyticsRow)
+	if result == nil {
+		return rows
+	}
+	for _, row := range result.Rows {
+		key := strings.Join(row.Keys, "|")
+		if stamp, err := time.Parse(time.RFC3339, key); err == nil {
+			key = stamp.Format("15:04")
+		}
+		rows[key] = row
+	}
+	return rows
 }
 
 func analyticsByKey(result *gsc.AnalyticsResult) map[string]gsc.AnalyticsRow {

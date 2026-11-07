@@ -36,14 +36,14 @@ func TestDiagnoseDropIncludesRowsMissingFromCurrentPeriod(t *testing.T) {
 }
 
 func TestBuildHourlyComparison(t *testing.T) {
-	current := &gsc.AnalyticsResult{Dimensions: []string{"HOUR"}, Rows: []gsc.AnalyticsRow{{Keys: []string{"09"}, Clicks: 10, Impressions: 100, CTR: 0.1}, {Keys: []string{"10"}, Clicks: 12, Impressions: 120, CTR: 0.1}}}
-	baseline := &gsc.AnalyticsResult{Dimensions: []string{"HOUR"}, Rows: []gsc.AnalyticsRow{{Keys: []string{"09"}, Clicks: 20, Impressions: 100, CTR: 0.2}, {Keys: []string{"10"}, Clicks: 12, Impressions: 100, CTR: 0.12}}}
+	current := &gsc.AnalyticsResult{Dimensions: []string{"HOUR"}, Rows: []gsc.AnalyticsRow{{Keys: []string{"2026-11-06T09:00:00-08:00"}, Clicks: 10, Impressions: 100, CTR: 0.1}, {Keys: []string{"2026-11-06T10:00:00-08:00"}, Clicks: 12, Impressions: 120, CTR: 0.1}}}
+	baseline := &gsc.AnalyticsResult{Dimensions: []string{"HOUR"}, Rows: []gsc.AnalyticsRow{{Keys: []string{"2026-10-30T09:00:00-07:00"}, Clicks: 20, Impressions: 100, CTR: 0.2}, {Keys: []string{"2026-10-30T10:00:00-07:00"}, Clicks: 12, Impressions: 100, CTR: 0.12}}}
 
 	report := BuildHourlyComparison(current, baseline)
 	if !report.Provisional {
 		t.Fatal("Provisional = false, want true")
 	}
-	if len(report.Rows) != 2 || report.Rows[0].Hour != "09" || report.Rows[0].ClickDelta != -10 {
+	if len(report.Rows) != 2 || report.Rows[0].Hour != "09:00" || report.Rows[0].ClickDelta != -10 || report.Rows[1].ClickDelta != 0 {
 		t.Fatalf("Rows = %#v", report.Rows)
 	}
 }
