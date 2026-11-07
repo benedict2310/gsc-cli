@@ -1,6 +1,7 @@
 package insights
 
 import (
+	"fmt"
 	"math"
 	"sort"
 	"strings"
@@ -57,6 +58,29 @@ func DiagnoseDrop(current, baseline *gsc.AnalyticsResult, opts DiagnoseOptions) 
 		report.Contributors[i].ShareOfLoss = math.Abs(report.Contributors[i].Contribution) / denom
 	}
 	return report
+}
+
+// ShiftDateKeys returns a copy of a DATE-keyed result with each date moved by days, so a
+// baseline period lines up day by day with the current period it is compared against.
+func ShiftDateKeys(result *gsc.AnalyticsResult, days int) (*gsc.AnalyticsResult, error) {
+	if result == nil {
+		return nil, nil
+	}
+	shifted := *result
+	shifted.Rows = make([]gsc.AnalyticsRow, 0, len(result.Rows))
+	for _, row := range result.Rows {
+		keys := append([]string(nil), row.Keys...)
+		if len(keys) > 0 {
+			date, err := time.Parse("2006-01-02", keys[0])
+			if err != nil {
+				return nil, fmt.Errorf("parse date key %q: %w", keys[0], err)
+			}
+			keys[0] = date.AddDate(0, 0, days).Format("2006-01-02")
+		}
+		row.Keys = keys
+		shifted.Rows = append(shifted.Rows, row)
+	}
+	return &shifted, nil
 }
 
 type HourlyComparisonRow struct {

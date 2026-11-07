@@ -103,3 +103,20 @@ func TestAuditSitemap(t *testing.T) {
 		t.Fatalf("report = %#v", report)
 	}
 }
+
+func TestShiftDateKeysAlignsDateSegments(t *testing.T) {
+	current := &gsc.AnalyticsResult{Dimensions: []string{"DATE"}, Rows: []gsc.AnalyticsRow{{Keys: []string{"2026-11-01"}, Clicks: 10, Impressions: 100, CTR: 0.1}, {Keys: []string{"2026-11-02"}, Clicks: 2, Impressions: 100, CTR: 0.02}}}
+	baseline := &gsc.AnalyticsResult{Dimensions: []string{"DATE"}, Rows: []gsc.AnalyticsRow{{Keys: []string{"2026-10-30"}, Clicks: 10, Impressions: 100, CTR: 0.1}, {Keys: []string{"2026-10-31"}, Clicks: 10, Impressions: 100, CTR: 0.1}}}
+
+	shifted, err := ShiftDateKeys(baseline, 2)
+	if err != nil {
+		t.Fatalf("ShiftDateKeys() error = %v", err)
+	}
+	if baseline.Rows[0].Keys[0] != "2026-10-30" {
+		t.Fatalf("ShiftDateKeys() mutated its input: %#v", baseline.Rows)
+	}
+	report := DiagnoseDrop(current, shifted, DiagnoseOptions{Segment: "date", MinLoss: 1, Limit: 5})
+	if len(report.Contributors) != 1 || report.Contributors[0].Key != "2026-11-02" || report.Contributors[0].Contribution != -8 {
+		t.Fatalf("Contributors = %#v", report.Contributors)
+	}
+}
