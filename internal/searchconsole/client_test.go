@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -258,5 +260,45 @@ func TestListSitesSanitizesAPIErrors(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "\n") {
 		t.Fatalf("error contains newline: %q", err)
+	}
+}
+
+func TestSiteScopedForbiddenErrorNamesServiceAccount(t *testing.T) {
+	t.Parallel()
+
+	credentialsFile := filepath.Join(t.TempDir(), "service-account.json")
+	if err := os.WriteFile(credentialsFile, []byte(`{"type":"service_account","client_email":"bot@project.iam.gserviceaccount.com","private_key":"secret"}`), 0o600); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"error":{"code":403,"message":"User does not have sufficient permission for site 'sc-domain:example.com'."}}`))
+	}))
+	defer server.Close()
+
+	client, err := New(context.Background(), Options{
+		CredentialsFile: credentialsFile,
+		HTTPClient:      server.Client(),
+		Endpoint:        server.URL + "/",
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if got := client.ServiceAccountEmail(); got != "bot@project.iam.gserviceaccount.com" {
+		t.Fatalf("ServiceAccountEmail() = %q", got)
+	}
+
+	_, err = client.ListSitemaps(context.Background(), "sc-domain:example.com")
+	if err == nil {
+		t.Fatal("ListSitemaps() expected error")
+	}
+	for _, want := range []string{"api returned 403", "bot@project.iam.gserviceaccount.com", "Users and permissions"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q does not contain %q", err, want)
+		}
+	}
+	if strings.Contains(err.Error(), "secret") {
+		t.Fatalf("error leaks credential contents: %q", err)
 	}
 }

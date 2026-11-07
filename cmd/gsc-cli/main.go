@@ -647,7 +647,7 @@ func runDoctor(ctx context.Context, args []string) error {
 		report.Checks = append(report.Checks, doctorCheck{
 			Name:   "configured_site_access",
 			Status: statusForMatch(found),
-			Detail: base.Site,
+			Detail: siteAccessDetail(base.Site, client.ServiceAccountEmail(), found),
 		})
 		if inferredURL, inferErr := cfg.InferInspectionURL(base.Site); inferErr == nil {
 			report.Checks = append(report.Checks, doctorCheck{
