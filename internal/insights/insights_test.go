@@ -120,3 +120,17 @@ func TestShiftDateKeysAlignsDateSegments(t *testing.T) {
 		t.Fatalf("Contributors = %#v", report.Contributors)
 	}
 }
+
+func TestBuildHourlyComparisonSumsRepeatedFallBackHour(t *testing.T) {
+	current := &gsc.AnalyticsResult{Dimensions: []string{"HOUR"}, Rows: []gsc.AnalyticsRow{{Keys: []string{"2026-11-01T01:00:00-07:00"}, Clicks: 2, Impressions: 17}, {Keys: []string{"2026-11-01T01:00:00-08:00"}, Clicks: 1, Impressions: 13}}}
+	baseline := &gsc.AnalyticsResult{Dimensions: []string{"HOUR"}, Rows: []gsc.AnalyticsRow{{Keys: []string{"2026-10-25T01:00:00-07:00"}, Clicks: 4, Impressions: 20}}}
+
+	report := BuildHourlyComparison(current, baseline)
+	if len(report.Rows) != 1 {
+		t.Fatalf("Rows = %#v", report.Rows)
+	}
+	row := report.Rows[0]
+	if row.Hour != "01:00" || row.CurrentClicks != 3 || row.CurrentImpressions != 30 || row.ClickDelta != -1 {
+		t.Fatalf("row = %#v, want both 01:00 hours summed", row)
+	}
+}

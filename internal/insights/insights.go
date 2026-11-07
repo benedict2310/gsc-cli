@@ -254,7 +254,7 @@ func AuditSitemap(sitemapURLs []string, analytics *gsc.AnalyticsResult) SitemapA
 }
 
 // analyticsByLocalHour keys rows by clock hour ("15:04"), because HOUR keys are full
-// timestamps and the compared days differ.
+// timestamps and the compared days differ. The hour repeated when clocks fall back is summed.
 func analyticsByLocalHour(result *gsc.AnalyticsResult) map[string]gsc.AnalyticsRow {
 	rows := make(map[string]gsc.AnalyticsRow)
 	if result == nil {
@@ -265,9 +265,21 @@ func analyticsByLocalHour(result *gsc.AnalyticsResult) map[string]gsc.AnalyticsR
 		if stamp, err := time.Parse(time.RFC3339, key); err == nil {
 			key = stamp.Format("15:04")
 		}
+		if existing, ok := rows[key]; ok {
+			row = mergeRows(existing, row)
+		}
 		rows[key] = row
 	}
 	return rows
+}
+
+func mergeRows(a, b gsc.AnalyticsRow) gsc.AnalyticsRow {
+	merged := gsc.AnalyticsRow{Keys: a.Keys, Clicks: a.Clicks + b.Clicks, Impressions: a.Impressions + b.Impressions}
+	if merged.Impressions > 0 {
+		merged.CTR = merged.Clicks / merged.Impressions
+		merged.Position = (a.Position*a.Impressions + b.Position*b.Impressions) / merged.Impressions
+	}
+	return merged
 }
 
 func analyticsByKey(result *gsc.AnalyticsResult) map[string]gsc.AnalyticsRow {
