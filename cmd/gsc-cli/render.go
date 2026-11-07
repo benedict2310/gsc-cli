@@ -171,6 +171,16 @@ func hasSite(sites []gsc.Site, target string) bool {
 	return false
 }
 
+func siteAccessDetail(site, account string, found bool) string {
+	if found {
+		return site
+	}
+	if account == "" {
+		account = "the service account"
+	}
+	return fmt.Sprintf("%s is not visible to %s; add that account as a user on the property in Search Console under Settings > Users and permissions", site, account)
+}
+
 func sumAnalyticsRows(rows []gsc.AnalyticsRow) (float64, float64) {
 	var impressions float64
 	var clicks float64
@@ -200,14 +210,4 @@ func renderAnalyticsTable(result *gsc.AnalyticsResult) error {
 
 func formatFloat(value float64) string {
 	return strconv.FormatFloat(value, 'f', -1, 64)
-}
-
-func siteAccessDetail(site, account string, found bool) string {
-	if found {
-		return site
-	}
-	if account == "" {
-		account = "the service account"
-	}
-	return fmt.Sprintf("%s is not visible to %s; add that account as a user on the property in Search Console under Settings > Users and permissions", site, account)
 }
