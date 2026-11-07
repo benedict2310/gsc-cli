@@ -39,6 +39,8 @@ type PullLog struct {
 
 type AnalyticsRecord struct {
 	Site             string  `json:"site"`
+	StartDate        string  `json:"startDate,omitempty"`
+	EndDate          string  `json:"endDate,omitempty"`
 	Date             string  `json:"date,omitempty"`
 	Hour             string  `json:"hour,omitempty"`
 	Page             string  `json:"page,omitempty"`
@@ -64,6 +66,8 @@ type InspectionRecord struct {
 
 type AnalyticsFilter struct {
 	Site       string
+	StartDate  string
+	EndDate    string
 	Date       string
 	Hour       string
 	Page       string
@@ -102,6 +106,10 @@ func (c *Cache) SaveAnalytics(hash string, req *gscapi.SearchAnalyticsQueryReque
 	for _, row := range result.Rows {
 		record := AnalyticsRecord{Site: result.Site, SearchType: req.SearchType, DataState: req.DataState, Provisional: provisional, Clicks: row.Clicks, Impressions: row.Impressions, CTR: row.CTR, Position: row.Position, PulledAt: pulledAt}
 		applyKeys(&record, result.Dimensions, row.Keys)
+		// Rows without a date or hour are totals for the requested period, so the period is part of their identity.
+		if record.Date == "" && record.Hour == "" {
+			record.StartDate, record.EndDate = req.StartDate, req.EndDate
+		}
 		index := indexAnalytics(data.Analytics, record)
 		if index >= 0 {
 			data.Analytics[index] = record
@@ -121,6 +129,12 @@ func (c *Cache) FindAnalytics(filter AnalyticsFilter) ([]AnalyticsRecord, error)
 	var rows []AnalyticsRecord
 	for _, row := range data.Analytics {
 		if filter.Site != "" && row.Site != filter.Site {
+			continue
+		}
+		if filter.StartDate != "" && row.StartDate != filter.StartDate {
+			continue
+		}
+		if filter.EndDate != "" && row.EndDate != filter.EndDate {
 			continue
 		}
 		if filter.Date != "" && row.Date != filter.Date {
@@ -228,7 +242,7 @@ func applyKeys(record *AnalyticsRecord, dimensions []string, keys []string) {
 
 func indexAnalytics(rows []AnalyticsRecord, target AnalyticsRecord) int {
 	for i, row := range rows {
-		if row.Site == target.Site && row.Date == target.Date && row.Hour == target.Hour && row.Page == target.Page && row.Query == target.Query && row.Country == target.Country && row.Device == target.Device && row.SearchAppearance == target.SearchAppearance && row.SearchType == target.SearchType {
+		if row.Site == target.Site && row.StartDate == target.StartDate && row.EndDate == target.EndDate && row.Date == target.Date && row.Hour == target.Hour && row.Page == target.Page && row.Query == target.Query && row.Country == target.Country && row.Device == target.Device && row.SearchAppearance == target.SearchAppearance && row.SearchType == target.SearchType {
 			return i
 		}
 	}

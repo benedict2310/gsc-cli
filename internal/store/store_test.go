@@ -104,3 +104,37 @@ func TestStoreSaveInspection(t *testing.T) {
 		t.Fatalf("status = %#v", status)
 	}
 }
+
+func TestStoreKeepsPeriodAggregatesFromDifferentPullsApart(t *testing.T) {
+	cache := New(filepath.Join(t.TempDir(), "cache.json"))
+	save := func(start, end string, dims []string, keys []string, clicks float64) {
+		t.Helper()
+		req := &gscapi.SearchAnalyticsQueryRequest{StartDate: start, EndDate: end, Dimensions: dims, SearchType: "WEB", DataState: "FINAL"}
+		result := &gsc.AnalyticsResult{Site: "sc-domain:example.com", StartDate: start, EndDate: end, Dimensions: dims, Rows: []gsc.AnalyticsRow{{Keys: keys, Clicks: clicks}}}
+		if err := cache.SaveAnalytics(start+end, req, result, gsc.QueryAllMetadata{}, false); err != nil {
+			t.Fatalf("SaveAnalytics() error = %v", err)
+		}
+	}
+	pageQuery := []string{"PAGE", "QUERY"}
+	save("2026-10-10", "2026-11-06", pageQuery, []string{"https://example.com/a", "alpha"}, 28)
+	save("2026-10-31", "2026-11-06", pageQuery, []string{"https://example.com/a", "alpha"}, 7)
+
+	rows, err := cache.FindAnalytics(AnalyticsFilter{Site: "sc-domain:example.com", StartDate: "2026-10-10", EndDate: "2026-11-06"})
+	if err != nil {
+		t.Fatalf("FindAnalytics() error = %v", err)
+	}
+	if len(rows) != 1 || rows[0].Clicks != 28 {
+		t.Fatalf("28-day rows = %#v", rows)
+	}
+	all, _ := cache.FindAnalytics(AnalyticsFilter{Site: "sc-domain:example.com"})
+	if len(all) != 2 {
+		t.Fatalf("all rows = %#v, want one per period", all)
+	}
+
+	save("2026-11-01", "2026-11-03", []string{"DATE"}, []string{"2026-11-02"}, 4)
+	save("2026-11-02", "2026-11-05", []string{"DATE"}, []string{"2026-11-02"}, 5)
+	daily, _ := cache.FindAnalytics(AnalyticsFilter{Site: "sc-domain:example.com", Date: "2026-11-02"})
+	if len(daily) != 1 || daily[0].Clicks != 5 || daily[0].StartDate != "" {
+		t.Fatalf("daily rows = %#v, want one upserted row without a period", daily)
+	}
+}
