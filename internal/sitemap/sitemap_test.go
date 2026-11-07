@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -52,5 +53,17 @@ func TestFetchReadsGzipCompressedSitemap(t *testing.T) {
 	want := []string{"https://example.com/a"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Fetch() = %#v, want %#v", got, want)
+	}
+}
+
+func TestFetchRejectsUnsuccessfulResponses(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`<?xml version="1.0"?><html><body>maintenance</body></html>`))
+	}))
+	defer server.Close()
+
+	if _, err := Fetch(server.Client(), server.URL+"/sitemap.xml"); err == nil || !strings.Contains(err.Error(), "503") {
+		t.Fatalf("Fetch() error = %v, want HTTP 503 error", err)
 	}
 }
