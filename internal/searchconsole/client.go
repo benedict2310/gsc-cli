@@ -2,9 +2,11 @@ package searchconsole
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"google.golang.org/api/googleapi"
@@ -20,7 +22,8 @@ type Options struct {
 }
 
 type Client struct {
-	service *gscapi.Service
+	service        *gscapi.Service
+	serviceAccount string
 }
 
 func New(ctx context.Context, opts Options) (*Client, error) {
@@ -49,7 +52,7 @@ func New(ctx context.Context, opts Options) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create Search Console client: %w", err)
 	}
-	return &Client{service: service}, nil
+	return &Client{service: service, serviceAccount: readClientEmail(opts.CredentialsFile)}, nil
 }
 
 func (c *Client) ListSites(ctx context.Context) ([]Site, error) {
@@ -71,7 +74,7 @@ func (c *Client) ListSites(ctx context.Context) ([]Site, error) {
 func (c *Client) QueryAnalytics(ctx context.Context, site string, req *gscapi.SearchAnalyticsQueryRequest) (*AnalyticsResult, error) {
 	resp, err := c.service.Searchanalytics.Query(site, req).Context(ctx).Do()
 	if err != nil {
-		return nil, sanitizeError("query analytics", err)
+		return nil, c.siteError("query analytics", err)
 	}
 
 	result := &AnalyticsResult{
@@ -97,7 +100,7 @@ func (c *Client) QueryAnalytics(ctx context.Context, site string, req *gscapi.Se
 func (c *Client) ListSitemaps(ctx context.Context, site string) ([]Sitemap, error) {
 	resp, err := c.service.Sitemaps.List(site).Context(ctx).Do()
 	if err != nil {
-		return nil, sanitizeError("list sitemaps", err)
+		return nil, c.siteError("list sitemaps", err)
 	}
 
 	result := make([]Sitemap, 0, len(resp.Sitemap))
@@ -110,7 +113,7 @@ func (c *Client) ListSitemaps(ctx context.Context, site string) ([]Sitemap, erro
 func (c *Client) GetSitemap(ctx context.Context, site, feedpath string) (*Sitemap, error) {
 	resp, err := c.service.Sitemaps.Get(site, feedpath).Context(ctx).Do()
 	if err != nil {
-		return nil, sanitizeError("get sitemap", err)
+		return nil, c.siteError("get sitemap", err)
 	}
 	result := toSitemap(resp)
 	return &result, nil
@@ -118,14 +121,14 @@ func (c *Client) GetSitemap(ctx context.Context, site, feedpath string) (*Sitema
 
 func (c *Client) SubmitSitemap(ctx context.Context, site, feedpath string) error {
 	if err := c.service.Sitemaps.Submit(site, feedpath).Context(ctx).Do(); err != nil {
-		return sanitizeError("submit sitemap", err)
+		return c.siteError("submit sitemap", err)
 	}
 	return nil
 }
 
 func (c *Client) DeleteSitemap(ctx context.Context, site, feedpath string) error {
 	if err := c.service.Sitemaps.Delete(site, feedpath).Context(ctx).Do(); err != nil {
-		return sanitizeError("delete sitemap", err)
+		return c.siteError("delete sitemap", err)
 	}
 	return nil
 }
@@ -133,7 +136,7 @@ func (c *Client) DeleteSitemap(ctx context.Context, site, feedpath string) error
 func (c *Client) InspectURL(ctx context.Context, req *gscapi.InspectUrlIndexRequest) (*InspectionResult, error) {
 	resp, err := c.service.UrlInspection.Index.Inspect(req).Context(ctx).Do()
 	if err != nil {
-		return nil, sanitizeError("inspect url", err)
+		return nil, c.siteError("inspect url", err)
 	}
 
 	result := &InspectionResult{
@@ -185,4 +188,39 @@ func sanitizeError(action string, err error) error {
 		return fmt.Errorf("%s: api returned %d %s", action, apiErr.Code, message)
 	}
 	return fmt.Errorf("%s: %w", action, err)
+}
+
+func (c *Client) ServiceAccountEmail() string {
+	return c.serviceAccount
+}
+
+func (c *Client) siteError(action string, err error) error {
+	sanitized := sanitizeError(action, err)
+	var apiErr *googleapi.Error
+	if !errors.As(err, &apiErr) || apiErr.Code != http.StatusForbidden {
+		return sanitized
+	}
+	account := c.serviceAccount
+	if account == "" {
+		account = "the service account"
+	}
+	return fmt.Errorf("%s. Add %s as a user on this property in Search Console under Settings > Users and permissions", strings.TrimSuffix(sanitized.Error(), "."), account)
+}
+
+// readClientEmail reads only the client_email field so no other key material is held.
+func readClientEmail(path string) string {
+	if strings.TrimSpace(path) == "" {
+		return ""
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var key struct {
+		ClientEmail string `json:"client_email"`
+	}
+	if err := json.Unmarshal(data, &key); err != nil {
+		return ""
+	}
+	return key.ClientEmail
 }
