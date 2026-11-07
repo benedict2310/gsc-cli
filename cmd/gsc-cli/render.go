@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/benedict2310/gsc-cli/internal/commandspec"
 	cfg "github.com/benedict2310/gsc-cli/internal/config"
+	"github.com/benedict2310/gsc-cli/internal/output"
 	gsc "github.com/benedict2310/gsc-cli/internal/searchconsole"
 )
 
@@ -182,22 +182,5 @@ func sumAnalyticsRows(rows []gsc.AnalyticsRow) (float64, float64) {
 }
 
 func renderAnalyticsTable(result *gsc.AnalyticsResult) error {
-	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	headers := append(append([]string{}, result.Dimensions...), "CLICKS", "IMPRESSIONS", "CTR", "POSITION")
-	fmt.Fprintln(tw, strings.Join(headers, "\t"))
-	for _, row := range result.Rows {
-		values := append([]string{}, row.Keys...)
-		values = append(values,
-			formatFloat(row.Clicks),
-			formatFloat(row.Impressions),
-			formatFloat(row.CTR),
-			formatFloat(row.Position),
-		)
-		fmt.Fprintln(tw, strings.Join(values, "\t"))
-	}
-	return tw.Flush()
-}
-
-func formatFloat(value float64) string {
-	return strconv.FormatFloat(value, 'f', -1, 64)
+	return output.RenderAnalytics(os.Stdout, cfg.OutputTable, result)
 }

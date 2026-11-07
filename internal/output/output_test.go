@@ -102,3 +102,24 @@ func TestRenderOverviewTableContainsSections(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderAnalyticsTableExplainsEmptyResult(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	err := RenderAnalytics(&buf, cfg.OutputTable, &gsc.AnalyticsResult{Dimensions: []string{"PAGE"}})
+	if err != nil {
+		t.Fatalf("RenderAnalytics() error = %v", err)
+	}
+	if !strings.Contains(buf.String(), "(no rows:") {
+		t.Fatalf("empty table has no explanation: %q", buf.String())
+	}
+
+	buf.Reset()
+	if err := RenderAnalytics(&buf, cfg.OutputJSON, &gsc.AnalyticsResult{Dimensions: []string{"PAGE"}, Rows: []gsc.AnalyticsRow{}}); err != nil {
+		t.Fatalf("RenderAnalytics() error = %v", err)
+	}
+	if strings.Contains(buf.String(), "no rows") {
+		t.Fatalf("json output gained a note: %q", buf.String())
+	}
+}
