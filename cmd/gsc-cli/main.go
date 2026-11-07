@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -624,7 +625,7 @@ func runDoctor(ctx context.Context, args []string) error {
 	}
 
 	report := doctorReport{
-		Version: buildVersion,
+		Version: currentVersionInfo().Version,
 		Site:    base.Site,
 		Checks: []doctorCheck{
 			{Name: "credentials_file", Status: "PASS", Detail: credentialDetail(base.CredentialsFile)},
@@ -703,11 +704,51 @@ func runVersion(args []string) error {
 	if mode != cfg.OutputJSON && mode != cfg.OutputTable {
 		return fmt.Errorf("unsupported output mode %q; supported values are json and table", mode)
 	}
-	return renderVersion(mode, versionInfo{
-		Version: buildVersion,
-		Commit:  buildCommit,
-		Date:    buildDate,
-	})
+	return renderVersion(mode, currentVersionInfo())
+}
+
+func currentVersionInfo() versionInfo {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		info = nil
+	}
+	return resolveVersionInfo(buildVersion, buildCommit, buildDate, info)
+}
+
+// resolveVersionInfo prefers ldflags values and falls back to what the Go toolchain stamps into every build.
+func resolveVersionInfo(version, commit, date string, info *debug.BuildInfo) versionInfo {
+	result := versionInfo{Version: version, Commit: commit, Date: date}
+	if info == nil {
+		return result
+	}
+	if result.Version == "dev" && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		result.Version = info.Main.Version
+	}
+	if result.Commit != "" && result.Date != "" {
+		return result
+	}
+	var revision, vcsTime string
+	modified := false
+	for _, setting := range info.Settings {
+		switch setting.Key {
+		case "vcs.revision":
+			revision = setting.Value
+		case "vcs.time":
+			vcsTime = setting.Value
+		case "vcs.modified":
+			modified = setting.Value == "true"
+		}
+	}
+	if result.Commit == "" && revision != "" {
+		result.Commit = revision
+		if modified {
+			result.Commit += "-dirty"
+		}
+	}
+	if result.Date == "" {
+		result.Date = vcsTime
+	}
+	return result
 }
 
 func credentialDetail(path string) string {
