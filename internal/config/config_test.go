@@ -285,3 +285,22 @@ func TestPreviousDateRange(t *testing.T) {
 		t.Fatalf("PreviousDateRange() = %#v", got)
 	}
 }
+
+func TestEndRangeAtShiftsWindowKeepingLength(t *testing.T) {
+	t.Parallel()
+
+	window := DateRange{Start: "2026-10-10", End: "2026-11-06"}
+	got, err := EndRangeAt(window, "2026-11-04")
+	if err != nil {
+		t.Fatalf("EndRangeAt() error = %v", err)
+	}
+	if got != (DateRange{Start: "2026-10-08", End: "2026-11-04"}) {
+		t.Fatalf("EndRangeAt() = %#v", got)
+	}
+	for _, end := range []string{"", "2026-11-06", "2026-11-07"} {
+		got, err := EndRangeAt(window, end)
+		if err != nil || got != window {
+			t.Fatalf("EndRangeAt(%q) = %#v, %v; want unchanged", end, got, err)
+		}
+	}
+}
