@@ -43,6 +43,9 @@ func RenderAnalytics(w io.Writer, mode string, result *gsc.AnalyticsResult) erro
 		)
 		fmt.Fprintln(tw, strings.Join(values, "\t"))
 	}
+	if len(result.Rows) == 0 {
+		fmt.Fprintln(tw, "(no rows: no Search Console data for this period and filter yet; new properties and the last 2-3 days are often empty)")
+	}
 	return tw.Flush()
 }
 

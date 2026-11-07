@@ -105,11 +105,15 @@ func runSyncAnalytics(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	req, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{StartDate: rangeValue.Start, EndDate: rangeValue.End, Dimensions: *dimensions, SearchType: *searchType, DataState: *dataState, Limit: 25000})
+	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
 	}
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	rangeValue, err = alignToLatestData(ctx, client, base.Site, rangeValue, *searchType, *dataState)
+	if err != nil {
+		return err
+	}
+	req, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{StartDate: rangeValue.Start, EndDate: rangeValue.End, Dimensions: *dimensions, SearchType: *searchType, DataState: *dataState, Limit: 25000})
 	if err != nil {
 		return err
 	}
@@ -346,11 +350,15 @@ func runAuditSitemap(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	req, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{StartDate: rangeValue.Start, EndDate: rangeValue.End, Dimensions: "page", SearchType: "web", DataState: "final", Limit: int64(*limit)})
+	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
 	}
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	rangeValue, err = alignToLatestData(ctx, client, base.Site, rangeValue, "web", "final")
+	if err != nil {
+		return err
+	}
+	req, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{StartDate: rangeValue.Start, EndDate: rangeValue.End, Dimensions: "page", SearchType: "web", DataState: "final", Limit: int64(*limit)})
 	if err != nil {
 		return err
 	}
@@ -380,6 +388,10 @@ func runOpportunities(ctx context.Context, args []string) error {
 		return err
 	}
 	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	if err != nil {
+		return err
+	}
+	rangeValue, err = alignToLatestData(ctx, client, base.Site, rangeValue, "web", "final")
 	if err != nil {
 		return err
 	}

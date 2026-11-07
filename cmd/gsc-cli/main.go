@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -294,8 +295,8 @@ func runAnalyticsTop(ctx context.Context, args []string, dimension string) error
 	fs.SetOutput(os.Stderr)
 	base := bindCommonFlags(fs)
 	var (
-		startDate  = fs.String("start", "", "start date in YYYY-MM-DD; defaults to a recent 28-day window ending yesterday")
-		endDate    = fs.String("end", "", "end date in YYYY-MM-DD; defaults to a recent 28-day window ending yesterday")
+		startDate  = fs.String("start", "", "start date in YYYY-MM-DD; defaults to a 28-day window ending on the latest day with data")
+		endDate    = fs.String("end", "", "end date in YYYY-MM-DD; defaults to a 28-day window ending on the latest day with data")
 		days       = fs.String("days", "", "shortcut window in days: 7, 28, or 90; defaults to 28 when omitted")
 		searchType = fs.String("search-type", "web", "search type: web,image,video,news,discover,google_news")
 		dataState  = fs.String("data-state", "final", "data state: final,all,hourly_all")
@@ -316,6 +317,18 @@ func runAnalyticsTop(ctx context.Context, args []string, dimension string) error
 	if err != nil {
 		return err
 	}
+
+	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	if err != nil {
+		return err
+	}
+	if *startDate == "" && *endDate == "" {
+		dateRange, err = alignToLatestData(ctx, client, base.Site, dateRange, *searchType, *dataState)
+		if err != nil {
+			return err
+		}
+	}
+
 	req, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{
 		StartDate:  dateRange.Start,
 		EndDate:    dateRange.End,
@@ -325,11 +338,6 @@ func runAnalyticsTop(ctx context.Context, args []string, dimension string) error
 		Limit:      *limit,
 		StartRow:   0,
 	})
-	if err != nil {
-		return err
-	}
-
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
 	}
@@ -396,6 +404,12 @@ func runReport(ctx context.Context, args []string) error {
 	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
+	}
+	if *startDate == "" && *endDate == "" {
+		dateRange, err = alignToLatestData(ctx, client, base.Site, dateRange, *searchType, *dataState)
+		if err != nil {
+			return err
+		}
 	}
 
 	topPagesReq, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{
@@ -491,12 +505,18 @@ func runReportCompare(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	previousRange, err := cfg.PreviousDateRange(currentRange)
+
+	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
 	}
-
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	if *startDate == "" && *endDate == "" {
+		currentRange, err = alignToLatestData(ctx, client, base.Site, currentRange, *searchType, *dataState)
+		if err != nil {
+			return err
+		}
+	}
+	previousRange, err := cfg.PreviousDateRange(currentRange)
 	if err != nil {
 		return err
 	}
@@ -605,7 +625,7 @@ func runDoctor(ctx context.Context, args []string) error {
 	}
 
 	report := doctorReport{
-		Version: buildVersion,
+		Version: currentVersionInfo().Version,
 		Site:    base.Site,
 		Checks: []doctorCheck{
 			{Name: "credentials_file", Status: "PASS", Detail: credentialDetail(base.CredentialsFile)},
@@ -647,7 +667,7 @@ func runDoctor(ctx context.Context, args []string) error {
 		report.Checks = append(report.Checks, doctorCheck{
 			Name:   "configured_site_access",
 			Status: statusForMatch(found),
-			Detail: base.Site,
+			Detail: siteAccessDetail(base.Site, client.ServiceAccountEmail(), found),
 		})
 		if inferredURL, inferErr := cfg.InferInspectionURL(base.Site); inferErr == nil {
 			report.Checks = append(report.Checks, doctorCheck{
@@ -684,11 +704,51 @@ func runVersion(args []string) error {
 	if mode != cfg.OutputJSON && mode != cfg.OutputTable {
 		return fmt.Errorf("unsupported output mode %q; supported values are json and table", mode)
 	}
-	return renderVersion(mode, versionInfo{
-		Version: buildVersion,
-		Commit:  buildCommit,
-		Date:    buildDate,
-	})
+	return renderVersion(mode, currentVersionInfo())
+}
+
+func currentVersionInfo() versionInfo {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		info = nil
+	}
+	return resolveVersionInfo(buildVersion, buildCommit, buildDate, info)
+}
+
+// resolveVersionInfo prefers ldflags values and falls back to what the Go toolchain stamps into every build.
+func resolveVersionInfo(version, commit, date string, info *debug.BuildInfo) versionInfo {
+	result := versionInfo{Version: version, Commit: commit, Date: date}
+	if info == nil {
+		return result
+	}
+	if result.Version == "dev" && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		result.Version = info.Main.Version
+	}
+	if result.Commit != "" && result.Date != "" {
+		return result
+	}
+	var revision, vcsTime string
+	modified := false
+	for _, setting := range info.Settings {
+		switch setting.Key {
+		case "vcs.revision":
+			revision = setting.Value
+		case "vcs.time":
+			vcsTime = setting.Value
+		case "vcs.modified":
+			modified = setting.Value == "true"
+		}
+	}
+	if result.Commit == "" && revision != "" {
+		result.Commit = revision
+		if modified {
+			result.Commit += "-dirty"
+		}
+	}
+	if result.Date == "" {
+		result.Date = vcsTime
+	}
+	return result
 }
 
 func credentialDetail(path string) string {
@@ -813,4 +873,38 @@ Recommended:
   Start here for a cold read on a property.
 `))
 	fmt.Fprintln(os.Stderr)
+}
+
+// alignToLatestData ends a defaulted window at the last date Search Console has data for,
+// because final data lags a few days and empty trailing days read as a traffic drop.
+func alignToLatestData(ctx context.Context, client *gsc.Client, site string, window cfg.DateRange, searchType, dataState string) (cfg.DateRange, error) {
+	if strings.EqualFold(strings.TrimSpace(dataState), "hourly_all") {
+		return window, nil
+	}
+	end, err := time.Parse("2006-01-02", window.End)
+	if err != nil {
+		return cfg.DateRange{}, fmt.Errorf("parse end date: %w", err)
+	}
+	req, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{
+		StartDate:  end.AddDate(0, 0, -13).Format("2006-01-02"),
+		EndDate:    window.End,
+		Dimensions: "date",
+		SearchType: searchType,
+		DataState:  dataState,
+		Limit:      25000,
+	})
+	if err != nil {
+		return cfg.DateRange{}, err
+	}
+	probe, err := client.QueryAnalytics(ctx, site, req)
+	if err != nil {
+		return cfg.DateRange{}, err
+	}
+	latest := ""
+	for _, row := range probe.Rows {
+		if len(row.Keys) > 0 && row.Keys[0] > latest {
+			latest = row.Keys[0]
+		}
+	}
+	return cfg.EndRangeAt(window, latest)
 }

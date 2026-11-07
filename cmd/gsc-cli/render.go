@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/benedict2310/gsc-cli/internal/commandspec"
 	cfg "github.com/benedict2310/gsc-cli/internal/config"
+	"github.com/benedict2310/gsc-cli/internal/output"
 	gsc "github.com/benedict2310/gsc-cli/internal/searchconsole"
 )
 
@@ -171,6 +171,16 @@ func hasSite(sites []gsc.Site, target string) bool {
 	return false
 }
 
+func siteAccessDetail(site, account string, found bool) string {
+	if found {
+		return site
+	}
+	if account == "" {
+		account = "the service account"
+	}
+	return fmt.Sprintf("%s is not visible to %s; add that account as a user on the property in Search Console under Settings > Users and permissions", site, account)
+}
+
 func sumAnalyticsRows(rows []gsc.AnalyticsRow) (float64, float64) {
 	var impressions float64
 	var clicks float64
@@ -182,22 +192,5 @@ func sumAnalyticsRows(rows []gsc.AnalyticsRow) (float64, float64) {
 }
 
 func renderAnalyticsTable(result *gsc.AnalyticsResult) error {
-	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	headers := append(append([]string{}, result.Dimensions...), "CLICKS", "IMPRESSIONS", "CTR", "POSITION")
-	fmt.Fprintln(tw, strings.Join(headers, "\t"))
-	for _, row := range result.Rows {
-		values := append([]string{}, row.Keys...)
-		values = append(values,
-			formatFloat(row.Clicks),
-			formatFloat(row.Impressions),
-			formatFloat(row.CTR),
-			formatFloat(row.Position),
-		)
-		fmt.Fprintln(tw, strings.Join(values, "\t"))
-	}
-	return tw.Flush()
-}
-
-func formatFloat(value float64) string {
-	return strconv.FormatFloat(value, 'f', -1, 64)
+	return output.RenderAnalytics(os.Stdout, cfg.OutputTable, result)
 }

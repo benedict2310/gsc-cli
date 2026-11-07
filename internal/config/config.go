@@ -320,6 +320,30 @@ func PreviousDateRange(current DateRange) (DateRange, error) {
 	}, nil
 }
 
+func EndRangeAt(r DateRange, end string) (DateRange, error) {
+	end = strings.TrimSpace(end)
+	if end == "" || end >= r.End {
+		return r, nil
+	}
+	latest, err := time.Parse("2006-01-02", end)
+	if err != nil {
+		return DateRange{}, fmt.Errorf("parse end date: %w", err)
+	}
+	currentEnd, err := time.Parse("2006-01-02", r.End)
+	if err != nil {
+		return DateRange{}, fmt.Errorf("parse current end date: %w", err)
+	}
+	start, err := time.Parse("2006-01-02", r.Start)
+	if err != nil {
+		return DateRange{}, fmt.Errorf("parse current start date: %w", err)
+	}
+	shift := currentEnd.Sub(latest)
+	return DateRange{
+		Start: start.Add(-shift).Format("2006-01-02"),
+		End:   end,
+	}, nil
+}
+
 func InferInspectionURL(site string) (string, error) {
 	site = strings.TrimSpace(site)
 	if site == "" {
