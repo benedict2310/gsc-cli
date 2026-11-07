@@ -40,6 +40,9 @@ func fetch(client *http.Client, url string, seen map[string]struct{}) ([]string,
 		return nil, fmt.Errorf("fetch sitemap: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, fmt.Errorf("fetch sitemap %s: HTTP %d", url, resp.StatusCode)
+	}
 	blob, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read sitemap: %w", err)

@@ -36,14 +36,14 @@ func TestDiagnoseDropIncludesRowsMissingFromCurrentPeriod(t *testing.T) {
 }
 
 func TestBuildHourlyComparison(t *testing.T) {
-	current := &gsc.AnalyticsResult{Dimensions: []string{"HOUR"}, Rows: []gsc.AnalyticsRow{{Keys: []string{"09"}, Clicks: 10, Impressions: 100, CTR: 0.1}, {Keys: []string{"10"}, Clicks: 12, Impressions: 120, CTR: 0.1}}}
-	baseline := &gsc.AnalyticsResult{Dimensions: []string{"HOUR"}, Rows: []gsc.AnalyticsRow{{Keys: []string{"09"}, Clicks: 20, Impressions: 100, CTR: 0.2}, {Keys: []string{"10"}, Clicks: 12, Impressions: 100, CTR: 0.12}}}
+	current := &gsc.AnalyticsResult{Dimensions: []string{"HOUR"}, Rows: []gsc.AnalyticsRow{{Keys: []string{"2026-11-06T09:00:00-08:00"}, Clicks: 10, Impressions: 100, CTR: 0.1}, {Keys: []string{"2026-11-06T10:00:00-08:00"}, Clicks: 12, Impressions: 120, CTR: 0.1}}}
+	baseline := &gsc.AnalyticsResult{Dimensions: []string{"HOUR"}, Rows: []gsc.AnalyticsRow{{Keys: []string{"2026-10-30T09:00:00-07:00"}, Clicks: 20, Impressions: 100, CTR: 0.2}, {Keys: []string{"2026-10-30T10:00:00-07:00"}, Clicks: 12, Impressions: 100, CTR: 0.12}}}
 
 	report := BuildHourlyComparison(current, baseline)
 	if !report.Provisional {
 		t.Fatal("Provisional = false, want true")
 	}
-	if len(report.Rows) != 2 || report.Rows[0].Hour != "09" || report.Rows[0].ClickDelta != -10 {
+	if len(report.Rows) != 2 || report.Rows[0].Hour != "09:00" || report.Rows[0].ClickDelta != -10 || report.Rows[1].ClickDelta != 0 {
 		t.Fatalf("Rows = %#v", report.Rows)
 	}
 }
@@ -101,5 +101,36 @@ func TestAuditSitemap(t *testing.T) {
 	}
 	if len(report.WithoutImpressions) != 1 || report.WithoutImpressions[0] != "https://example.com/b" {
 		t.Fatalf("report = %#v", report)
+	}
+}
+
+func TestShiftDateKeysAlignsDateSegments(t *testing.T) {
+	current := &gsc.AnalyticsResult{Dimensions: []string{"DATE"}, Rows: []gsc.AnalyticsRow{{Keys: []string{"2026-11-01"}, Clicks: 10, Impressions: 100, CTR: 0.1}, {Keys: []string{"2026-11-02"}, Clicks: 2, Impressions: 100, CTR: 0.02}}}
+	baseline := &gsc.AnalyticsResult{Dimensions: []string{"DATE"}, Rows: []gsc.AnalyticsRow{{Keys: []string{"2026-10-30"}, Clicks: 10, Impressions: 100, CTR: 0.1}, {Keys: []string{"2026-10-31"}, Clicks: 10, Impressions: 100, CTR: 0.1}}}
+
+	shifted, err := ShiftDateKeys(baseline, 2)
+	if err != nil {
+		t.Fatalf("ShiftDateKeys() error = %v", err)
+	}
+	if baseline.Rows[0].Keys[0] != "2026-10-30" {
+		t.Fatalf("ShiftDateKeys() mutated its input: %#v", baseline.Rows)
+	}
+	report := DiagnoseDrop(current, shifted, DiagnoseOptions{Segment: "date", MinLoss: 1, Limit: 5})
+	if len(report.Contributors) != 1 || report.Contributors[0].Key != "2026-11-02" || report.Contributors[0].Contribution != -8 {
+		t.Fatalf("Contributors = %#v", report.Contributors)
+	}
+}
+
+func TestBuildHourlyComparisonSumsRepeatedFallBackHour(t *testing.T) {
+	current := &gsc.AnalyticsResult{Dimensions: []string{"HOUR"}, Rows: []gsc.AnalyticsRow{{Keys: []string{"2026-11-01T01:00:00-07:00"}, Clicks: 2, Impressions: 17}, {Keys: []string{"2026-11-01T01:00:00-08:00"}, Clicks: 1, Impressions: 13}}}
+	baseline := &gsc.AnalyticsResult{Dimensions: []string{"HOUR"}, Rows: []gsc.AnalyticsRow{{Keys: []string{"2026-10-25T01:00:00-07:00"}, Clicks: 4, Impressions: 20}}}
+
+	report := BuildHourlyComparison(current, baseline)
+	if len(report.Rows) != 1 {
+		t.Fatalf("Rows = %#v", report.Rows)
+	}
+	row := report.Rows[0]
+	if row.Hour != "01:00" || row.CurrentClicks != 3 || row.CurrentImpressions != 30 || row.ClickDelta != -1 {
+		t.Fatalf("row = %#v, want both 01:00 hours summed", row)
 	}
 }

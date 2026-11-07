@@ -283,11 +283,23 @@ func ResolveNamedPeriod(value string, now time.Time) (DateRange, error) {
 		start := end.AddDate(0, 0, -(count - 1))
 		return DateRange{Start: start.Format("2006-01-02"), End: end.Format("2006-01-02")}, nil
 	case "m":
-		start := end.AddDate(0, -(count - 1), 0)
+		start := subtractMonthsClamped(end, count).AddDate(0, 0, 1)
 		return DateRange{Start: start.Format("2006-01-02"), End: end.Format("2006-01-02")}, nil
 	default:
 		return DateRange{}, errors.New("unsupported period unit")
 	}
+}
+
+// subtractMonthsClamped moves back whole calendar months, clamping the day to the target
+// month's length so 31 March minus one month is 28 February, not 3 March.
+func subtractMonthsClamped(t time.Time, months int) time.Time {
+	firstOfTarget := time.Date(t.Year(), t.Month()-time.Month(months), 1, 0, 0, 0, 0, t.Location())
+	lastDay := firstOfTarget.AddDate(0, 1, -1).Day()
+	day := t.Day()
+	if day > lastDay {
+		day = lastDay
+	}
+	return time.Date(firstOfTarget.Year(), firstOfTarget.Month(), day, 0, 0, 0, 0, t.Location())
 }
 
 func PreviousDateRange(current DateRange) (DateRange, error) {

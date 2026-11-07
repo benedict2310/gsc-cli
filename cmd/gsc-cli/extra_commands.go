@@ -236,6 +236,12 @@ func runDiagnose(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
+		if dimension == "date" {
+			baselineRows, err = insights.ShiftDateKeys(baselineRows, daysBetween(baselineRange.Start, currentRange.Start))
+			if err != nil {
+				return err
+			}
+		}
 		reports = append(reports, insights.DiagnoseDrop(currentRows, baselineRows, insights.DiagnoseOptions{Segment: segment, MinLoss: *minLoss, Limit: *limit}))
 	}
 	return renderDropReports(base.Output, dropReports{Current: currentRange, Baseline: baselineRange, Reports: reports})
@@ -591,6 +597,15 @@ func splitCSV(value string) []string {
 		}
 	}
 	return out
+}
+
+func daysBetween(start, end string) int {
+	from, fromErr := time.Parse("2006-01-02", start)
+	to, toErr := time.Parse("2006-01-02", end)
+	if fromErr != nil || toErr != nil {
+		return 0
+	}
+	return int(to.Sub(from).Hours() / 24)
 }
 
 func normalizeSegmentDimension(segment string) string {

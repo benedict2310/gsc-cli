@@ -273,6 +273,27 @@ func TestResolveNamedPeriodLastDays(t *testing.T) {
 	}
 }
 
+func TestResolveNamedPeriodLastMonths(t *testing.T) {
+	cases := []struct {
+		period, now, start, end string
+	}{
+		{"last-1m", "2026-11-07", "2026-10-07", "2026-11-06"},
+		{"last-16m", "2026-11-07", "2025-07-07", "2026-11-06"},
+		{"last-1m", "2026-04-01", "2026-03-01", "2026-03-31"},
+		{"last-1m", "2026-03-31", "2026-03-01", "2026-03-30"},
+	}
+	for _, tc := range cases {
+		now, _ := time.Parse("2006-01-02", tc.now)
+		got, err := ResolveNamedPeriod(tc.period, now.Add(12*time.Hour))
+		if err != nil {
+			t.Fatalf("ResolveNamedPeriod(%s, %s) error = %v", tc.period, tc.now, err)
+		}
+		if got.Start != tc.start || got.End != tc.end {
+			t.Fatalf("ResolveNamedPeriod(%s, %s) = %#v, want %s to %s", tc.period, tc.now, got, tc.start, tc.end)
+		}
+	}
+}
+
 func TestPreviousDateRange(t *testing.T) {
 	got, err := PreviousDateRange(DateRange{
 		Start: "2026-02-15",

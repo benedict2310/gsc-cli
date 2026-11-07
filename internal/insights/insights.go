@@ -1,9 +1,11 @@
 package insights
 
 import (
+	"fmt"
 	"math"
 	"sort"
 	"strings"
+	"time"
 
 	gsc "github.com/benedict2310/gsc-cli/internal/searchconsole"
 )
@@ -58,6 +60,29 @@ func DiagnoseDrop(current, baseline *gsc.AnalyticsResult, opts DiagnoseOptions) 
 	return report
 }
 
+// ShiftDateKeys returns a copy of a DATE-keyed result with each date moved by days, so a
+// baseline period lines up day by day with the current period it is compared against.
+func ShiftDateKeys(result *gsc.AnalyticsResult, days int) (*gsc.AnalyticsResult, error) {
+	if result == nil {
+		return nil, nil
+	}
+	shifted := *result
+	shifted.Rows = make([]gsc.AnalyticsRow, 0, len(result.Rows))
+	for _, row := range result.Rows {
+		keys := append([]string(nil), row.Keys...)
+		if len(keys) > 0 {
+			date, err := time.Parse("2006-01-02", keys[0])
+			if err != nil {
+				return nil, fmt.Errorf("parse date key %q: %w", keys[0], err)
+			}
+			keys[0] = date.AddDate(0, 0, days).Format("2006-01-02")
+		}
+		row.Keys = keys
+		shifted.Rows = append(shifted.Rows, row)
+	}
+	return &shifted, nil
+}
+
 type HourlyComparisonRow struct {
 	Hour                string  `json:"hour"`
 	CurrentClicks       float64 `json:"currentClicks"`
@@ -73,8 +98,8 @@ type HourlyComparison struct {
 }
 
 func BuildHourlyComparison(current, baseline *gsc.AnalyticsResult) HourlyComparison {
-	currentMap := analyticsByKey(current)
-	baselineMap := analyticsByKey(baseline)
+	currentMap := analyticsByLocalHour(current)
+	baselineMap := analyticsByLocalHour(baseline)
 	allKeys := make(map[string]struct{})
 	for key := range currentMap {
 		allKeys[key] = struct{}{}
@@ -226,6 +251,35 @@ func AuditSitemap(sitemapURLs []string, analytics *gsc.AnalyticsResult) SitemapA
 	sort.Strings(report.WithoutImpressions)
 	sort.Strings(report.MissingFromSitemap)
 	return report
+}
+
+// analyticsByLocalHour keys rows by clock hour ("15:04"), because HOUR keys are full
+// timestamps and the compared days differ. The hour repeated when clocks fall back is summed.
+func analyticsByLocalHour(result *gsc.AnalyticsResult) map[string]gsc.AnalyticsRow {
+	rows := make(map[string]gsc.AnalyticsRow)
+	if result == nil {
+		return rows
+	}
+	for _, row := range result.Rows {
+		key := strings.Join(row.Keys, "|")
+		if stamp, err := time.Parse(time.RFC3339, key); err == nil {
+			key = stamp.Format("15:04")
+		}
+		if existing, ok := rows[key]; ok {
+			row = mergeRows(existing, row)
+		}
+		rows[key] = row
+	}
+	return rows
+}
+
+func mergeRows(a, b gsc.AnalyticsRow) gsc.AnalyticsRow {
+	merged := gsc.AnalyticsRow{Keys: a.Keys, Clicks: a.Clicks + b.Clicks, Impressions: a.Impressions + b.Impressions}
+	if merged.Impressions > 0 {
+		merged.CTR = merged.Clicks / merged.Impressions
+		merged.Position = (a.Position*a.Impressions + b.Position*b.Impressions) / merged.Impressions
+	}
+	return merged
 }
 
 func analyticsByKey(result *gsc.AnalyticsResult) map[string]gsc.AnalyticsRow {
