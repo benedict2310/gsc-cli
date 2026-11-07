@@ -294,8 +294,8 @@ func runAnalyticsTop(ctx context.Context, args []string, dimension string) error
 	fs.SetOutput(os.Stderr)
 	base := bindCommonFlags(fs)
 	var (
-		startDate  = fs.String("start", "", "start date in YYYY-MM-DD; defaults to a recent 28-day window ending yesterday")
-		endDate    = fs.String("end", "", "end date in YYYY-MM-DD; defaults to a recent 28-day window ending yesterday")
+		startDate  = fs.String("start", "", "start date in YYYY-MM-DD; defaults to a 28-day window ending on the latest day with data")
+		endDate    = fs.String("end", "", "end date in YYYY-MM-DD; defaults to a 28-day window ending on the latest day with data")
 		days       = fs.String("days", "", "shortcut window in days: 7, 28, or 90; defaults to 28 when omitted")
 		searchType = fs.String("search-type", "web", "search type: web,image,video,news,discover,google_news")
 		dataState  = fs.String("data-state", "final", "data state: final,all,hourly_all")
@@ -316,6 +316,18 @@ func runAnalyticsTop(ctx context.Context, args []string, dimension string) error
 	if err != nil {
 		return err
 	}
+
+	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	if err != nil {
+		return err
+	}
+	if *startDate == "" && *endDate == "" {
+		dateRange, err = alignToLatestData(ctx, client, base.Site, dateRange, *searchType, *dataState)
+		if err != nil {
+			return err
+		}
+	}
+
 	req, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{
 		StartDate:  dateRange.Start,
 		EndDate:    dateRange.End,
@@ -325,11 +337,6 @@ func runAnalyticsTop(ctx context.Context, args []string, dimension string) error
 		Limit:      *limit,
 		StartRow:   0,
 	})
-	if err != nil {
-		return err
-	}
-
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
 	}
@@ -396,6 +403,12 @@ func runReport(ctx context.Context, args []string) error {
 	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
+	}
+	if *startDate == "" && *endDate == "" {
+		dateRange, err = alignToLatestData(ctx, client, base.Site, dateRange, *searchType, *dataState)
+		if err != nil {
+			return err
+		}
 	}
 
 	topPagesReq, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{
@@ -491,12 +504,18 @@ func runReportCompare(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	previousRange, err := cfg.PreviousDateRange(currentRange)
+
+	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
 	}
-
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	if *startDate == "" && *endDate == "" {
+		currentRange, err = alignToLatestData(ctx, client, base.Site, currentRange, *searchType, *dataState)
+		if err != nil {
+			return err
+		}
+	}
+	previousRange, err := cfg.PreviousDateRange(currentRange)
 	if err != nil {
 		return err
 	}
@@ -813,4 +832,38 @@ Recommended:
   Start here for a cold read on a property.
 `))
 	fmt.Fprintln(os.Stderr)
+}
+
+// alignToLatestData ends a defaulted window at the last date Search Console has data for,
+// because final data lags a few days and empty trailing days read as a traffic drop.
+func alignToLatestData(ctx context.Context, client *gsc.Client, site string, window cfg.DateRange, searchType, dataState string) (cfg.DateRange, error) {
+	if strings.EqualFold(strings.TrimSpace(dataState), "hourly_all") {
+		return window, nil
+	}
+	end, err := time.Parse("2006-01-02", window.End)
+	if err != nil {
+		return cfg.DateRange{}, fmt.Errorf("parse end date: %w", err)
+	}
+	req, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{
+		StartDate:  end.AddDate(0, 0, -13).Format("2006-01-02"),
+		EndDate:    window.End,
+		Dimensions: "date",
+		SearchType: searchType,
+		DataState:  dataState,
+		Limit:      25000,
+	})
+	if err != nil {
+		return cfg.DateRange{}, err
+	}
+	probe, err := client.QueryAnalytics(ctx, site, req)
+	if err != nil {
+		return cfg.DateRange{}, err
+	}
+	latest := ""
+	for _, row := range probe.Rows {
+		if len(row.Keys) > 0 && row.Keys[0] > latest {
+			latest = row.Keys[0]
+		}
+	}
+	return cfg.EndRangeAt(window, latest)
 }

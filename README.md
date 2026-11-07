@@ -277,6 +277,7 @@ For `top-pages`, `top-queries`, and `report overview`:
 - `--days` supports `7`, `28`, or `90`
 - default is `28`
 - explicit `--start` and `--end` take precedence over `--days`
+- without explicit dates, the window ends on the latest day Search Console has data for (final data usually lags 2-3 days), as do `report compare` and the `--period` windows of `sync analytics`, `audit sitemap` and `opportunities`
 
 For `report compare`:
 - compares the current period against the immediately preceding equal-length period
