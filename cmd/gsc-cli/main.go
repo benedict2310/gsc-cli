@@ -22,6 +22,9 @@ var (
 	buildDate    = ""
 )
 
+// newClient is a variable so tests can point commands at a fake API.
+var newClient = gsc.New
+
 func main() {
 	if err := run(context.Background(), os.Args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -200,7 +203,7 @@ func runSites(ctx context.Context, args []string) error {
 		return err
 	}
 
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	client, err := newClient(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
 	}
@@ -270,7 +273,7 @@ func runAnalyticsQuery(ctx context.Context, args []string) error {
 		return err
 	}
 
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	client, err := newClient(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
 	}
@@ -318,7 +321,7 @@ func runAnalyticsTop(ctx context.Context, args []string, dimension string) error
 		return err
 	}
 
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	client, err := newClient(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
 	}
@@ -401,7 +404,7 @@ func runReport(ctx context.Context, args []string) error {
 		}
 	}
 
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	client, err := newClient(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
 	}
@@ -506,7 +509,7 @@ func runReportCompare(ctx context.Context, args []string) error {
 		return err
 	}
 
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	client, err := newClient(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
 	}
@@ -632,7 +635,7 @@ func runDoctor(ctx context.Context, args []string) error {
 		},
 	}
 
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	client, err := newClient(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		report.Checks = append(report.Checks, doctorCheck{
 			Name:   "client_init",
