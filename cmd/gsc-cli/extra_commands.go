@@ -42,9 +42,15 @@ type indexabilityReport struct {
 }
 
 type indexabilityRow struct {
-	URL     string   `json:"url"`
-	Verdict string   `json:"verdict,omitempty"`
-	Issues  []string `json:"issues,omitempty"`
+	URL           string   `json:"url"`
+	Verdict       string   `json:"verdict,omitempty"`
+	CoverageState string   `json:"coverageState,omitempty"`
+	LastCrawlTime string   `json:"lastCrawlTime,omitempty"`
+	Issues        []string `json:"issues,omitempty"`
+}
+
+func newIndexabilityRow(url string, result gsc.InspectionResult, issues []string) indexabilityRow {
+	return indexabilityRow{URL: url, Verdict: result.Verdict, CoverageState: result.CoverageState, LastCrawlTime: result.LastCrawlTime, Issues: issues}
 }
 
 func runCache(ctx context.Context, args []string) error {
@@ -105,7 +111,7 @@ func runSyncAnalytics(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	client, err := newClient(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
 	}
@@ -158,7 +164,7 @@ func runSyncHourly(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	client, err := newClient(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
 	}
@@ -213,7 +219,7 @@ func runDiagnose(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	client, err := newClient(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
 	}
@@ -271,7 +277,7 @@ func runMonitor(ctx context.Context, args []string) error {
 		return fmt.Errorf("invalid date: %w", err)
 	}
 	baselineDate := parsed.AddDate(0, 0, -7).Format("2006-01-02")
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	client, err := newClient(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
 	}
@@ -333,7 +339,11 @@ func runAuditSitemap(ctx context.Context, args []string) error {
 	sitemapURL := fs.String("sitemap-url", "", "sitemap XML URL")
 	period := fs.String("period", "last-90d", "period like last-90d")
 	limit := fs.Int("limit", 25000, "maximum analytics rows")
+	dataState := fs.String("data-state", "final", "data state: final or all")
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if err := checkDailyDataState(*dataState); err != nil {
 		return err
 	}
 	if err := base.Resolve(true); err != nil {
@@ -350,15 +360,15 @@ func runAuditSitemap(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	client, err := newClient(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
 	}
-	rangeValue, err = alignToLatestData(ctx, client, base.Site, rangeValue, "web", "final")
+	rangeValue, err = alignToLatestData(ctx, client, base.Site, rangeValue, "web", *dataState)
 	if err != nil {
 		return err
 	}
-	req, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{StartDate: rangeValue.Start, EndDate: rangeValue.End, Dimensions: "page", SearchType: "web", DataState: "final", Limit: int64(*limit)})
+	req, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{StartDate: rangeValue.Start, EndDate: rangeValue.End, Dimensions: "page", SearchType: "web", DataState: *dataState, Limit: int64(*limit)})
 	if err != nil {
 		return err
 	}
@@ -377,7 +387,11 @@ func runOpportunities(ctx context.Context, args []string) error {
 	types := fs.String("types", "near-win,ctr-gap", "opportunity types")
 	minImpressions := fs.Float64("min-impressions", 100, "minimum impressions")
 	limit := fs.Int("limit", 20, "maximum items")
+	dataState := fs.String("data-state", "final", "data state: final or all")
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if err := checkDailyDataState(*dataState); err != nil {
 		return err
 	}
 	if err := base.Resolve(true); err != nil {
@@ -387,15 +401,15 @@ func runOpportunities(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	client, err := newClient(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
 	}
-	rangeValue, err = alignToLatestData(ctx, client, base.Site, rangeValue, "web", "final")
+	rangeValue, err = alignToLatestData(ctx, client, base.Site, rangeValue, "web", *dataState)
 	if err != nil {
 		return err
 	}
-	currentReq, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{StartDate: rangeValue.Start, EndDate: rangeValue.End, Dimensions: "query,page", SearchType: "web", DataState: "final", Limit: 25000})
+	currentReq, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{StartDate: rangeValue.Start, EndDate: rangeValue.End, Dimensions: "query,page", SearchType: "web", DataState: *dataState, Limit: 25000})
 	if err != nil {
 		return err
 	}
@@ -409,7 +423,7 @@ func runOpportunities(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		previousReq, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{StartDate: baselineRange.Start, EndDate: baselineRange.End, Dimensions: "query,page", SearchType: "web", DataState: "final", Limit: 25000})
+		previousReq, err := cfg.BuildAnalyticsRequest(cfg.AnalyticsInput{StartDate: baselineRange.Start, EndDate: baselineRange.End, Dimensions: "query,page", SearchType: "web", DataState: *dataState, Limit: 25000})
 		if err != nil {
 			return err
 		}
@@ -420,6 +434,16 @@ func runOpportunities(ctx context.Context, args []string) error {
 	}
 	report := insights.FindOpportunities(currentRows, previousRows, insights.OpportunityOptions{Types: splitCSV(*types), MinImpressions: *minImpressions, Limit: *limit})
 	return renderOpportunities(base.Output, report)
+}
+
+// checkDailyDataState allows the data states these daily reports can use;
+// hourly_all needs the HOUR dimension, which they never query.
+func checkDailyDataState(state string) error {
+	switch state {
+	case "final", "all":
+		return nil
+	}
+	return fmt.Errorf("data-state must be final or all, got %q", state)
 }
 
 func runSitemaps(ctx context.Context, args []string) error {
@@ -438,7 +462,7 @@ func runSitemaps(ctx context.Context, args []string) error {
 		return err
 	}
 	writeScope := args[0] == "submit" || args[0] == "delete"
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile, WriteScope: writeScope})
+	client, err := newClient(ctx, gsc.Options{CredentialsFile: base.CredentialsFile, WriteScope: writeScope})
 	if err != nil {
 		return err
 	}
@@ -527,7 +551,7 @@ func runInspect(ctx context.Context, args []string) error {
 		return err
 	}
 
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	client, err := newClient(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
 	}
@@ -547,7 +571,7 @@ func inspectBatch(ctx context.Context, base *cfg.Common, urlsFile string, maxURL
 	if err != nil {
 		return err
 	}
-	client, err := gsc.New(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
+	client, err := newClient(ctx, gsc.Options{CredentialsFile: base.CredentialsFile})
 	if err != nil {
 		return err
 	}
@@ -566,7 +590,7 @@ func inspectBatch(ctx context.Context, base *cfg.Common, urlsFile string, maxURL
 		if err := cache.SaveInspection(*result, issues); err != nil {
 			return err
 		}
-		report.Results = append(report.Results, indexabilityRow{URL: url, Verdict: result.Verdict, Issues: issues})
+		report.Results = append(report.Results, newIndexabilityRow(url, *result, issues))
 		time.Sleep(100 * time.Millisecond)
 	}
 	return renderIndexability(base.Output, report)
@@ -715,9 +739,9 @@ func renderIndexability(mode string, report indexabilityReport) error {
 		return writeJSON(os.Stdout, report)
 	}
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "URL\tVERDICT\tISSUES")
+	fmt.Fprintln(tw, "URL\tVERDICT\tCOVERAGE\tLAST_CRAWL\tISSUES")
 	for _, row := range report.Results {
-		fmt.Fprintf(tw, "%s\t%s\t%s\n", row.URL, row.Verdict, strings.Join(row.Issues, ","))
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", row.URL, row.Verdict, row.CoverageState, row.LastCrawlTime, strings.Join(row.Issues, ","))
 	}
 	return tw.Flush()
 }

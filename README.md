@@ -279,6 +279,12 @@ For `top-pages`, `top-queries`, and `report overview`:
 - explicit `--start` and `--end` take precedence over `--days`
 - without explicit dates, the window ends on the latest day Search Console has data for (final data usually lags 2-3 days), as do `report compare` and the `--period` windows of `sync analytics`, `audit sitemap` and `opportunities`
 
+For `audit sitemap` and `opportunities`:
+- `--data-state final` (default) or `all`, which adds the last 2-3 days Google has not finalized; use the same state across reports that are compared
+
+For `audit indexability`:
+- each URL's verdict, coverage state, last crawl time and issues
+
 For `report compare`:
 - compares the current period against the immediately preceding equal-length period
 - supports `--dimension page` and `--dimension query`
